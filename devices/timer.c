@@ -20,6 +20,10 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
+/* List of processes in THREAD_BLOCK state, that is, processes
+    that are called timer_sleep function */
+static struct list waiting_list;
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
@@ -29,12 +33,14 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
-
+static bool timer_cmp_waking_time (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+static void timer_check_if_wake (void);
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
 timer_init (void) 
-{
+{ 
+  list_init (&waiting_list);/* init waiting list */
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -89,11 +95,22 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  if (ticks <= 0) 
+    return;
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+
+  enum intr_level old_level;
+  old_level = intr_disable();
+
+  struct thread *cur = thread_current();
+  /* generate the time that the thread should wake and insert it into the waiting_list */
+  cur->waking_time = timer_ticks() + ticks;
+  list_insert_ordered(&waiting_list, &cur->elem, (list_less_func *) timer_cmp_waking_time, NULL);
+  thread_block();
+
+  intr_set_level(old_level);
+
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -172,6 +189,22 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  timer_check_if_wake ();                       /* check if threads should wake */
+
+  if (thread_mlfqs){
+    thread_update_recent_cpu_by_one();          /* Every timer_interrupy, the current thread's recent_cpu should plus 1 */
+
+    if (timer_ticks() % TIMER_FREQ == 0){       /* Every second (ticks % TIMER_FREQ == 0 means a second), 
+                                                   we should update load_avg and every thread's recent_cpu */ 
+      thread_update_load_avg();
+      thread_update_recent_cpu();
+    }
+
+    if (timer_ticks() % 4 == 0)                 /* Every four cycle, we should update every thread's priority */
+      thread_update_all_thread_priority();
+  }
+  
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -243,4 +276,38 @@ real_time_delay (int64_t num, int32_t denom)
      the possibility of overflow. */
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
+}
+
+/* Using waking time as the priority of threads in the waiting list,
+   comparing function for list_insert_ordered() */
+static bool
+timer_cmp_waking_time (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+  int x = list_entry (a, struct thread, elem)-> waking_time;
+  int y = list_entry (b, struct thread, elem)-> waking_time;
+  return x < y;
+}
+
+/* Used in timer_tick function to check if the given thread t should wake */
+static void
+timer_check_if_wake (void)
+{
+  struct list_elem *e;
+
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  e = list_begin (&waiting_list);
+  while (e != list_end (&waiting_list)) {
+    struct thread *t = list_entry (e, struct thread, elem);
+    /* Check if the thread on the head should wake */
+    if (t->waking_time <= ticks && t->status == THREAD_BLOCKED){
+      /* if it should wake, pop and wake it */
+      list_pop_front (&waiting_list);
+      thread_unblock (t);
+      /* maintain the iterator */
+      e = list_begin (&waiting_list);
+    }
+    else break; 
+    /* if the thread on the head should not wake,
+       the thread left also should not wake */
+  }
 }
