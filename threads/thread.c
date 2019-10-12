@@ -786,7 +786,7 @@ thread_update_thread_priority (struct thread * t)
   fixed_point_t point_prio = FP_SUB (INT_TO_FP(PRI_MAX), subtrahend); 
   
   /* Convert it to int type */
-  int int_prio = FP_TO_INT_ROUND_ZERO (point_prio); 
+  int int_prio = FP_TO_INT_ROUND_NEAR (point_prio); 
 
   /* Guaruntee priority is between PRI_MIN and PRI_MAX */
   if (int_prio < PRI_MIN)
