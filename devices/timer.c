@@ -33,7 +33,9 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
-static bool timer_cmp_waking_time (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+static bool timer_cmp_waking_time (const struct list_elem *a, 
+                                   const struct list_elem *b, 
+                                   void *aux UNUSED);
 static void timer_check_if_wake (void);
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -189,22 +191,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-  timer_check_if_wake ();                       /* check if threads should wake */
-
-  if (thread_mlfqs){
-    thread_update_recent_cpu_by_one();          /* Every timer_interrupy, the current thread's recent_cpu should plus 1 */
-
-    if (timer_ticks() % TIMER_FREQ == 0){       /* Every second (ticks % TIMER_FREQ == 0 means a second), 
-                                                   we should update load_avg and every thread's recent_cpu */ 
-      thread_update_load_avg();
-      thread_update_recent_cpu();
-    }
-
-    if (timer_ticks() % 4 == 0)                 /* Every four cycle, we should update every thread's priority */
-      thread_update_all_thread_priority();
-  }
-  
-
+  timer_check_if_wake ();                   /* check if threads should wake */
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

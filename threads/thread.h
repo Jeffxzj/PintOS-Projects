@@ -4,7 +4,6 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -25,7 +24,6 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-#define fixed_point_t int               /* Fixed point type */
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -87,25 +85,16 @@ struct thread
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
-    char name[16];                      /* Name (for debugging purposes).*/
+    char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    struct list_elem allelem;           /* List element for all threads list.*/
+    struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
     /* For Alarm Clock */
     int64_t waking_time;                /* Time the thread should wake */
-    
-    /* For Priority Scheduling */
-    int initial_priority;               /* Initial Priority */
-    struct list locks_holding;          /* All locks the threads is holding */
-    struct lock *lock_to_wait;          /* The lock which blocks the thread */
-    
-    /* For Advanced Scheduling */
-    int nice_value;                     /* Nice value */
-    fixed_point_t recent_cpu;           /* Recent CPU time */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -146,26 +135,10 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
-void thread_donate_priority (struct lock *);
-void thread_update_priority (struct thread *);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
-void thread_set_lock (struct lock *);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
-/* Functions used for advanced scheduler */
-void thread_update_load_avg (void);                      
-void thread_update_recent_cpu (void);                      
-void thread_update_recent_cpu_by_one (void);             
-void thread_update_thread_priority (struct thread *);    
-void thread_update_all_thread_priority (void);           
-
-/* A comparative function for calling list_insert_ordered */
-bool thread_cmp_priority (const struct list_elem *a, 
-                          const struct list_elem *b, 
-                          void *aux);
-
 
 #endif /* threads/thread.h */
