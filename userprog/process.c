@@ -30,16 +30,21 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
+  char *exe_name,*save_ptr;
+  char *file;
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  
+  file = palloc_get_page(0);
+  strlcpy (file, file_name, PGSIZE);
+  exe_name = strtok_r(file, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (exe_name, PRI_DEFAULT, start_process, fn_copy);
+  palloc_free_page (file);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -53,14 +58,56 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  char *exe_name, *save_ptr, *token;
+  char *argv[256];
+  int argc = 1;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  exe_name = strtok_r(file_name, " ", &save_ptr);
+  success = load (exe_name, &if_.eip, &if_.esp);
 
+  if (success)
+    {
+      /* Push the exe_name */
+      if_.esp -= strlen(exe_name) + 1;
+      memcpy (if_.esp, exe_name, strlen(exe_name) + 1);
+      argv[0] = if_.esp;
+      /* Push all the argv */
+      while ((token = strtok_r(NULL, " ", &save_ptr)) != NULL)
+        {
+          if_.esp -= strlen(token) + 1;
+          memcpy (if_.esp, token, strlen(token) + 1);
+          argv[argc++] = if_.esp;
+        }
+      /* Word Alignment */
+      while ((int)if_.esp % 4)
+        if_.esp--;
+      /* Push null pointer sentinel */
+      if_.esp -= sizeof(char*);
+      memset(if_.esp, 0, sizeof(char*));
+      /* Push address of argv */
+      for (int i = argc-1; i >= 0; i--)
+        {
+          if_.esp -= sizeof(char*);
+          memcpy (if_.esp, &argv[i], sizeof(char*));
+        }
+      /* Push address of argv[0] */
+      if_.esp -= sizeof(char**);
+      *((char **) if_.esp) = if_.esp + sizeof(char **);
+      /* Push argc */
+      if_.esp -= sizeof(int);
+      *((int *) if_.esp) = argc;
+      /* Push fake return address */
+      if_.esp -= sizeof(int *);
+      *((int *) if_.esp) = 0;
+
+      hex_dump((uintptr_t)if_.esp, if_.esp, 128, true);
+
+    }
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
@@ -90,7 +137,7 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   while (true)
-    thread_yield ();
+    thread_yield();
 }
 
 /* Free the current process's resources. */
