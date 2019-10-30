@@ -289,6 +289,9 @@ syscall_seek (int fd, unsigned position)
   BAD_POINTER_EXIT (&fd);
   BAD_POINTER_EXIT (&position);
   lock_acquire (&fs_lock);
+  struct file *f = find_opened_file (thread_current(), fd);
+  if (f != NULL)
+    file_seek (f,position);
   lock_release (&fs_lock);
   
 }
@@ -297,13 +300,24 @@ static unsigned
 syscall_tell (int fd)
 {
   lock_acquire (&fs_lock);
-  lock_release (&fs_lock);  
+  unsigned pos;
+  struct file *f = find_opened_file (thread_current(), fd);
+  if (f != NULL)
+    pos = (unsigned) file_tell (f);
+  else
+    pos = (unsigned) -1;
+  
+  lock_release (&fs_lock);
+  return pos;  
 }
 
 static void 
 syscall_close (int fd)
 {
   lock_acquire (&fs_lock);
+  struct file *f =find_opened_file (thread_current(), fd);
+  if (f != NULL)
+    file_close (f);
   lock_release (&fs_lock);
 
 }
