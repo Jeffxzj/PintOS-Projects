@@ -2,15 +2,17 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "process.h"
+#include "pagedir.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "devices/shutdown.h"
+#include "devices/input.h"
 #include "lib/user/syscall.h"
-#include "../filesys/file.h"
-#include "../lib/kernel/console.c"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 
 
 static void syscall_handler (struct intr_frame *);
@@ -259,7 +261,7 @@ syscall_read (int fd, void *buffer, unsigned size)
   if (fd == 0)
     {
       uint8_t *buf = buffer;
-      for (int i = 0; i < size; i++)
+      for (unsigned int i = 0; i < size; i++)
         buf[i] = input_getc ();
       size_read = size;
     }
@@ -287,8 +289,7 @@ syscall_write (int fd, const void *buffer, unsigned size)
   lock_acquire (&fs_lock);
   if (fd == 1)
     { 
-      uint8_t *buf = buffer;
-      for (int i = 0; i < size; i++)
+      for (unsigned int i = 0; i < size; i++)
         putbuf ((char *)buffer, (size_t)size);
       size_write = size;
     }
@@ -296,7 +297,7 @@ syscall_write (int fd, const void *buffer, unsigned size)
     {
       struct file *f = find_opened_file (thread_current(), fd);
       if (f != NULL)
-        size_write = file_read (f, buffer, size);
+        size_write = file_write (f, buffer, size);
     }
   lock_release (&fs_lock);
   return size_write;
