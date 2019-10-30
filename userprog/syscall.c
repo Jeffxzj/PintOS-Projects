@@ -10,6 +10,7 @@
 #include "devices/shutdown.h"
 #include "lib/user/syscall.h"
 #include "../filesys/file.h"
+#include "../lib/kernel/console.c"
 
 
 static void syscall_handler (struct intr_frame *);
@@ -208,21 +209,20 @@ syscall_open (const char *file)
   BAD_POINTER_EXIT (file);
 
   struct thread *cur = thread_current ();
-  struct file *f = filesys_open (file);
   struct file_descriptor *fd_struct = NULL;
-  
+  int status = -1;
   lock_acquire (&fs_lock);
+  struct file *f = filesys_open (file);
   if (f != NULL)
     {
       fd_struct = malloc (sizeof (struct file_descriptor));
       fd_struct->file = f;
       fd_struct->fd = ++cur->file_num;
       list_push_back (&cur->fd_list, &fd_struct->elem);
-      return fd_struct->fd;
+      status = fd_struct->fd;
     }
   lock_release (&fs_lock);
-  
-  return -1;
+  return status;
 }
 
 /* Returns the size, in bytes, of the file open as fd. */
@@ -266,21 +266,40 @@ syscall_read (int fd, void *buffer, unsigned size)
   else
     {
       struct file *f = find_opened_file (thread_current(), fd);
-      size_read = file_read (f, buffer, size);
+      if (f != NULL)
+        size_read = file_read (f, buffer, size);
     }
   lock_release (&fs_lock);
   return size_read;
 }
 
-
-
+/* Writes size bytes from buffer to the open file fd. Returns the number of 
+   bytes actually written, which may be less than size if some bytes could not 
+   be written. */
 static int 
 syscall_write (int fd, const void *buffer, unsigned size)
 {
+  BAD_POINTER_EXIT (&fd);  
   BAD_POINTER_EXIT (buffer);
+  BAD_POINTER_EXIT (&size);
+  
+  int size_write = -1;
   lock_acquire (&fs_lock);
+  if (fd == 1)
+    { 
+      uint8_t *buf = buffer;
+      for (int i = 0; i < size; i++)
+        putbuf ((char *)buffer, (size_t)size);
+      size_write = size;
+    }
+  else
+    {
+      struct file *f = find_opened_file (thread_current(), fd);
+      if (f != NULL)
+        size_write = file_read (f, buffer, size);
+    }
   lock_release (&fs_lock);
-
+  return size_write;
 }
 
 static void 

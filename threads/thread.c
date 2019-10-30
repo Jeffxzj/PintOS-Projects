@@ -469,7 +469,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   #ifdef USERPROG
-  t->file_num = 0;
+  t->file_num = 2;
   t->exit_code = 0;
   t->visited = 0;
   list_init (&t->child_list);
