@@ -40,6 +40,12 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
   
   file = palloc_get_page(0);
+  if (file == NULL)
+    {
+      palloc_free_page (fn_copy);
+      return TID_ERROR;
+    }
+    
   strlcpy (file, file_name, PGSIZE);
   exe_name = strtok_r(file, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
@@ -134,26 +140,50 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid) 
+process_wait (tid_t child_tid UNUSED)   
 {
-  while (true)
-    thread_yield();
-  if (child_tid != TID_ERROR)
+  struct thread *current = thread_current ();
+  if (child_tid == TID_ERROR)
+    return -1;
+  
+  if( list_empty(&current->child_list) )
+    return -1;
+  else 
     {
-      
+     struct list_elem* iter;
+     for (iter = list_begin (&current->child_list);
+          iter != list_end (&current->child_list);
+          iter = list_next (iter)) 
+          {
+            struct thread *child = list_entry (iter, struct thread, elem);
+            if (child->tid == child_tid)
+              {
+                sema_down (&child->wait_sema);
+                list_remove (iter);
+                return child->exit_code;
+              }
+              
+          }
     }
+  return -1;
 }
 
 /* Free the current process's resources. */
 void
 process_exit (void)
 {
+  
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
+  #ifdef USERPROG
+  printf ("%s: exit(%d)\n", cur->name, cur->exit_code);
+  sema_up(&cur->wait_sema);
+  #endif
+
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -167,6 +197,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+    
 }
 
 /* Sets up the CPU for running user code in the current
