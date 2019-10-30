@@ -197,6 +197,10 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+  #ifdef USERPROG
+  list_push_back (&thread_current()->child_list, &t->elem);
+
+  #endif
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -463,6 +467,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  #ifdef USERPROG
+
+  t->exit_code = 0;
+  t->visited = 0;
+  list_init (&t->child_list);
+  sema_init (&t->wait_sema, 0);
+
+  #endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

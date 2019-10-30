@@ -47,74 +47,89 @@ syscall_handler (struct intr_frame *f)
   switch (sys_code)
     {
     case SYS_HALT:
-      syscall_halt ();
-      break;
+      {
+        syscall_halt ();
+        break;
+      }
+     
     
     case SYS_EXIT:
-      int status = *(esp + 1);
-      syscall_exit (status);
-      break;
-    
+      {
+        int status = *(esp + 1);
+        syscall_exit (status);
+        break;
+      }
     case SYS_EXEC:
-      char *cmd_line = (char *)*(esp + 1);
-      f->eax = syscall_exec (cmd_line);
-      break;
-    
+      {
+        char *cmd_line = (char *)*(esp + 1);
+        f->eax = syscall_exec (cmd_line);
+        break;
+      }
     case SYS_WAIT:
-      pid_t pid = *(esp + 1);
-      f->eax = syscall_wait (pid);
-      break;
-
+      {
+        pid_t pid = *(esp + 1);
+        f->eax = syscall_wait (pid);
+        break;
+      }
     case SYS_CREATE:
-      char *file = (char *)*(esp + 1);
-      unsigned initial_size = *(esp + 2);
-      f->eax = syscall_create (file, initial_size);
-      break;
-    
+      {
+        char *file = (char *)*(esp + 1);
+        unsigned initial_size = *(esp + 2);
+        f->eax = syscall_create (file, initial_size);
+        break;
+      }
     case SYS_REMOVE:
-      char *file = (char *)*(esp + 1);
-      f->eax = syscall_remove (file);
-      break;
-    
+      {
+        char *file = (char *)*(esp + 1);
+        f->eax = syscall_remove (file);
+        break;
+      } 
     case SYS_OPEN:
-      char *file = (char *)*(esp + 1);
-      f->eax = syscall_open (file);
-      break;
-    
+      {
+        char *file = (char *)*(esp + 1);
+        f->eax = syscall_open (file);
+        break;
+      }
     case SYS_FILESIZE:
-      int fd = *(esp + 1);
-      f->eax = syscall_filesize (fd);
-      break;
-    
+      {
+        int fd = *(esp + 1);
+        f->eax = syscall_filesize (fd);
+        break;
+      }
     case SYS_READ:
-      int fd = *(esp + 1);
-      void *buffer = (void *)*(esp + 2);
-      unsigned size = *(esp + 3);
-      f->eax = syscall_read (fd, buffer, size);
-      break;
-    
+      {
+        int fd = *(esp + 1);
+        void *buffer = (void *)*(esp + 2);
+        unsigned size = *(esp + 3);
+        f->eax = syscall_read (fd, buffer, size);
+        break;
+      }
     case SYS_WRITE:
-      int fd = *(esp + 1);
-      void *buffer = (void *)*(esp + 2);
-      unsigned size = *(esp + 3);
-      f->eax = syscall_write (fd, buffer, size);
-      break;
-
+      {
+        int fd = *(esp + 1);
+        void *buffer = (void *)*(esp + 2);
+        unsigned size = *(esp + 3);
+        f->eax = syscall_write (fd, buffer, size);
+        break;
+      }
     case SYS_SEEK:
-      int fd = *(esp + 1);
-      unsigned position = *(esp + 2);
-      syscall_seek (fd, position);
-      break;
-
+      {
+        int fd = *(esp + 1);
+        unsigned position = *(esp + 2);
+        syscall_seek (fd, position);
+        break;
+      }
     case SYS_TELL:
-      int fd = *(esp + 1);
-      f->eax = syscall_tell (fd);
-      break;
-
+      {
+        int fd = *(esp + 1);
+        f->eax = syscall_tell (fd);
+        break;
+      }
     case SYS_CLOSE:
-      int fd = *(esp + 1);
-      syscall_close (fd);
-    
+      {
+        int fd = *(esp + 1);
+        syscall_close (fd);
+      }
     default:
       break;
     }
@@ -131,6 +146,17 @@ syscall_exit (int status)
 {      
   
   thread_exit ();
+}
+static int 
+syscall_wait (pid_t pid)
+{
+
+}
+
+static bool 
+syscall_create (const char *file, unsigned initial_size)
+{
+  
 }
 
 static pid_t
