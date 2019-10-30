@@ -1,15 +1,16 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "process.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "threads/malloc.h"
-#include "filesys/filesys.h"
-#include "filesys/file.h"
 #include "devices/shutdown.h"
 #include "lib/user/syscall.h"
+#include "../filesys/file.h"
+
 
 static void syscall_handler (struct intr_frame *);
 
@@ -31,6 +32,7 @@ static void syscall_close (int fd);
 /* Helper functions */
 static bool check_valid_pointer (const void *ptr);
 static void BAD_POINTER_EXIT(const void *ptr);
+static struct file *find_opened_file (struct thread *t, int fd);
 
 static struct lock fs_lock;      /* Lock to protect file system syscalls */
 
@@ -58,8 +60,6 @@ syscall_handler (struct intr_frame *f)
         syscall_halt ();
         break;
       }
-     
-    
     case SYS_EXIT:
       {
         int status = *(esp + 1);
@@ -136,6 +136,7 @@ syscall_handler (struct intr_frame *f)
       {
         int fd = *(esp + 1);
         syscall_close (fd);
+        break;
       }
     default:
       break;
@@ -151,19 +152,7 @@ syscall_halt (void)
 static void
 syscall_exit (int status)
 {      
-  
   thread_exit ();
-}
-static int 
-syscall_wait (pid_t pid)
-{
-
-}
-
-static bool 
-syscall_create (const char *file, unsigned initial_size)
-{
-  
 }
 
 static pid_t
@@ -242,24 +231,48 @@ syscall_filesize (int fd)
 {
   BAD_POINTER_EXIT (&fd);
 
-  struct file_descriptor *fd_struct = NULL;
+  int size = -1;
+  struct file *f = NULL;
+  
+  f = find_opened_file (thread_current(), fd);
   lock_acquire (&fs_lock);
-  fd_struct = find_opened_file (thread_current(), fd);
-  if (fd_struct != NULL)
-    return (int)file_length (fd_struct->file);
+  if (f != NULL)
+    size = file_length (f);
 
   lock_release (&fs_lock);
-
+  return size;
 }
 
+/* Reads size bytes from the file open as fd into buffer. Returns the number of 
+   bytes actually read (0 at end of file), or -1 if the file could not be read 
+   (due to a condition other than end of file). Fd 0 reads from the keyboard 
+   using input_getc(). */
 static int 
 syscall_read (int fd, void *buffer, unsigned size)
 {
+  BAD_POINTER_EXIT (&fd);  
   BAD_POINTER_EXIT (buffer);
-  lock_acquire (&fs_lock);
-  lock_release (&fs_lock);
+  BAD_POINTER_EXIT (&size);
 
+  int size_read = -1;
+  lock_acquire (&fs_lock);
+  if (fd == 0)
+    {
+      uint8_t *buf = buffer;
+      for (int i = 0; i < size; i++)
+        buf[i] = input_getc ();
+      size_read = size;
+    }
+  else
+    {
+      struct file *f = find_opened_file (thread_current(), fd);
+      size_read = file_read (f, buffer, size);
+    }
+  lock_release (&fs_lock);
+  return size_read;
 }
+
+
 
 static int 
 syscall_write (int fd, const void *buffer, unsigned size)
@@ -313,21 +326,21 @@ check_valid_pointer (const void *ptr)
 static void 
 BAD_POINTER_EXIT(const void *ptr)
 {
-  if (!check_valid_pointer(ptr))
+  if (!check_valid_pointer (ptr))
     syscall_exit(-1);
 }
 
-static struct file_descriptor *
+static struct file *
 find_opened_file (struct thread *t, int fd)
 {
   struct list_elem *e = NULL;
   struct list *l = &t->fd_list;
   struct file_descriptor *fd_struct = NULL;
-  for (e = list_begin (l); e != list_end (l); e = list_next (l))
+  for (e = list_begin (l); e != list_end (l); e = list_next (e))
     {
       fd_struct = list_entry (e, struct file_descriptor, elem);
       if (fd_struct->fd == fd)
-        return fd_struct;
+        return fd_struct->file;
     }
   return NULL;
 }

@@ -2,7 +2,6 @@
 #define USERPROG_SYSCALL_H
 
 #include <list.h>
-#include "filesys/file.c"
 
 void syscall_init (void);
 
