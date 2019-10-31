@@ -474,7 +474,6 @@ init_thread (struct thread *t, const char *name, int priority)
   /* Owned by wait */
   list_init (&t->child_list);
   t->exit_code = 0;
-
   /* Owned by wait */
   #endif
 

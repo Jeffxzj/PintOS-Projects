@@ -114,6 +114,7 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+  
 /* Owned by wait */
 struct child_info{
   tid_t tid;

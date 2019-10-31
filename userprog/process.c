@@ -23,6 +23,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 void try_sema_up (struct thread * parent, tid_t child_tid);
 int try_sema_down (struct thread * parent, tid_t child_tid);
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -169,8 +170,6 @@ process_exit (void)
   if (parent != NULL)
       try_sema_up (parent, cur->tid);
 
-  #endif
-
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -184,17 +183,20 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-    
 }
 
 /* Sets up the CPU for running user code in the current
    thread.
    This function is called on every context switch. */
+void
+process_activate (void)
+{  
   struct thread *t = thread_current ();
 
   /* Activate thread's page tables. */
   pagedir_activate (t->pagedir);
 
+  /* Set thread's kernel stack for use in processing. 
      interrupts. */
   tss_update ();
 }
@@ -533,9 +535,9 @@ install_page (void *upage, void *kpage, bool writable)
 
 
 int 
-try_sema_down (struct thread * parent, tid_t child_tid)
+try_sema_down (struct thread *parent, tid_t child_tid)
 {
-  if( list_empty(&parent->child_list) )
+  if (list_empty (&parent->child_list))
     return -1;
   else 
     {
@@ -559,7 +561,7 @@ try_sema_down (struct thread * parent, tid_t child_tid)
 void
 try_sema_up (struct thread * parent, tid_t child_tid)
 {
-  if( list_empty(&parent->child_list) )
+  if( list_empty (&parent->child_list) )
     return;
   else 
     {

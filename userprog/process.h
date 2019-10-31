@@ -8,5 +8,6 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 
-void try_sema_up (struct thread * parent, tid_t child_tid);
+void try_sema_up (struct thread *parent, tid_t child_tid);
+int try_sema_down (struct thread *parent, tid_t child_tid);
 #endif /* userprog/process.h */

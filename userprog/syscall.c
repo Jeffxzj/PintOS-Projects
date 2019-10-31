@@ -167,7 +167,7 @@ syscall_exit (int status)
   cur->exit_code = status;
   if (parent == NULL)
     return;
-  if(list_empty(&parent->child_list) )
+  if (list_empty(&parent->child_list) )
     return;
     
   struct list_elem* iter;
@@ -196,7 +196,7 @@ syscall_exit (int status)
 static pid_t
 syscall_exec (const char *cmd_line)
 {
-  pid_t pid = process_execute(cmd_line);
+  pid_t pid = process_execute (cmd_line);
   return pid;
 }
 
@@ -377,8 +377,7 @@ static bool
 check_valid_pointer (uint32_t *esp, uint8_t argc)
 {
   struct thread *cur = thread_current ();
-  bool is_addr_mapped = false;
-  uint32_t iter = esp;
+  uint32_t *iter = esp;
   for (uint8_t i = 0; i < argc; i++, iter++)
     {
       /* Check if ptr is null and is a user virtual address */
