@@ -23,7 +23,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 void try_sema_up (struct thread * parent, tid_t child_tid);
 int try_sema_down (struct thread * parent, tid_t child_tid);
-
+void free_child_list (struct thread * f);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -65,11 +65,12 @@ process_execute (const char *file_name)
       if (child != NULL)
         {
           sema_init (&child->wait_sema, 0);
-          child->tid = t->tid;
+          child->tid = tid;
           child->exit_code = 0;
           child->exited = false;
           child->waited = false;
           list_push_back (&thread_current()->child_list, &child->child_ele);
+
         }
     }
   return tid;
@@ -164,7 +165,7 @@ process_wait (tid_t child_tid)
   struct thread *current = thread_current ();
   if (child_tid == TID_ERROR)
     return -1;
-  
+
   return try_sema_down (current, child_tid);
 }
 
@@ -179,10 +180,15 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
+<<<<<<< HEAD
+=======
+
+>>>>>>> 87e8efeda8ee858dbe09839246733301b1824f91
   printf ("%s: exit(%d)\n", cur->name, cur->exit_code);
+  
   struct thread *parent = get_thread_by_tid (cur->parent_tid);
   if (parent != NULL)
-      try_sema_up (parent, cur->tid);
+    try_sema_up(parent,cur->tid);
 
   if (pd != NULL) 
     {
@@ -561,8 +567,8 @@ try_sema_down (struct thread *parent, tid_t child_tid)
           iter = list_next (iter)) 
           {
             struct child_info *child = list_entry (iter, struct child_info, child_ele);
-            if (child->tid == child_tid)
-              {
+            if (child->tid == child_tid && !child->waited && !child->exited)
+              {                
                 sema_down (&child->wait_sema);
                 child->waited = true;
                 return child->exit_code;
@@ -575,6 +581,7 @@ try_sema_down (struct thread *parent, tid_t child_tid)
 void
 try_sema_up (struct thread * parent, tid_t child_tid)
 {
+  
   if( list_empty (&parent->child_list) )
     return;
   else 
@@ -583,14 +590,29 @@ try_sema_up (struct thread * parent, tid_t child_tid)
      for (iter = list_begin (&parent->child_list);
           iter != list_end (&parent->child_list);
           iter = list_next (iter)) 
-          {
-            struct child_info *child = list_entry (iter, struct child_info, child_ele);
-            if (child->tid == child_tid)
-              {
-                sema_up (&child->wait_sema);
-                child->exited = true;
-                return;
-              }  
-          }
+        {
+          struct child_info *child = list_entry (iter, struct child_info, child_ele);
+          if (child->tid == child_tid)
+            {
+              sema_up (&child->wait_sema);
+              child->exited = true;
+              return;
+            }  
+        }
     } 
+}
+
+void 
+free_child_list (struct thread * f)
+{
+  if (f == NULL || list_empty (&f->child_list))
+    return;
+  struct list_elem *iter;
+  for (iter = list_begin (&f->child_list);
+       iter != list_end (&f->child_list);
+       iter = list_next (iter))
+    {
+      struct child_info *child = list_entry (iter, struct child_info, child_ele);
+      free (child);
+    }
 }
