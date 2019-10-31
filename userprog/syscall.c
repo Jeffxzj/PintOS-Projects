@@ -49,7 +49,6 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  printf ("system call!\n");
 
   uint32_t *esp = f->esp;
 
@@ -252,9 +251,7 @@ syscall_filesize (int fd)
 static int 
 syscall_read (int fd, void *buffer, unsigned size)
 {
-  BAD_POINTER_EXIT (&fd);  
   BAD_POINTER_EXIT (buffer);
-  BAD_POINTER_EXIT (&size);
 
   int size_read = -1;
   lock_acquire (&fs_lock);
@@ -281,16 +278,14 @@ syscall_read (int fd, void *buffer, unsigned size)
 static int 
 syscall_write (int fd, const void *buffer, unsigned size)
 {
-  BAD_POINTER_EXIT (&fd);  
   BAD_POINTER_EXIT (buffer);
-  BAD_POINTER_EXIT (&size);
   
   int size_write = -1;
   lock_acquire (&fs_lock);
   if (fd == 1)
     { 
-      for (unsigned int i = 0; i < size; i++)
-        putbuf ((char *)buffer, (size_t)size);
+      printf("writing\n");
+      putbuf ((char *)buffer, (size_t)size);
       size_write = size;
     }
   else
@@ -306,14 +301,11 @@ syscall_write (int fd, const void *buffer, unsigned size)
 static void 
 syscall_seek (int fd, unsigned position)
 {
-  BAD_POINTER_EXIT (&fd);
-  BAD_POINTER_EXIT (&position);
   lock_acquire (&fs_lock);
   struct file *f = find_opened_file (thread_current(), fd);
   if (f != NULL)
     file_seek (f,position);
   lock_release (&fs_lock);
-  
 }
 
 static unsigned 
@@ -335,7 +327,7 @@ static void
 syscall_close (int fd)
 {
   lock_acquire (&fs_lock);
-  struct file *f =find_opened_file (thread_current(), fd);
+  struct file *f = find_opened_file (thread_current(), fd);
   if (f != NULL)
     file_close (f);
   lock_release (&fs_lock);
@@ -347,11 +339,12 @@ static bool
 check_valid_pointer (const void *ptr)
 {
   struct thread *cur = thread_current ();
+  bool is_addr_mapped = false;
   /* Check if ptr is null and is a user virtual address */
   if (ptr != NULL && is_user_vaddr (ptr))
     {
       /* Check if ptr is allocated within the current thread's pages */
-      bool is_addr_mapped = pagedir_get_page(cur->pagedir, ptr) != NULL;
+      is_addr_mapped = (pagedir_get_page (cur->pagedir, ptr) != NULL);
       return is_addr_mapped; 
     }
   return false; 
