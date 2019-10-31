@@ -49,7 +49,6 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  printf ("system call!\n");
 
   uint32_t *esp = f->esp;
 
@@ -155,13 +154,16 @@ syscall_halt (void)
 static void
 syscall_exit (int status)
 {      
+  struct thread *cur = thread_current();
+  cur->exit_code = status;
   thread_exit ();
 }
 
 static pid_t
 syscall_exec (const char *cmd_line)
 {
-
+  pid_t pid = process_execute(cmd_line);
+  return pid;
 }
 
 static int 
@@ -281,16 +283,21 @@ syscall_read (int fd, void *buffer, unsigned size)
 static int 
 syscall_write (int fd, const void *buffer, unsigned size)
 {
-  BAD_POINTER_EXIT (&fd);  
+   
+
+  
   BAD_POINTER_EXIT (buffer);
-  BAD_POINTER_EXIT (&size);
+
   
   int size_write = -1;
   lock_acquire (&fs_lock);
+
   if (fd == 1)
     { 
-      for (unsigned int i = 0; i < size; i++)
+      //for (unsigned int i = 0; i < size; i++){
         putbuf ((char *)buffer, (size_t)size);
+      ///}
+        
       size_write = size;
     }
   else
