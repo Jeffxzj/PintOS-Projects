@@ -154,13 +154,16 @@ syscall_halt (void)
 static void
 syscall_exit (int status)
 {      
+  struct thread *cur = thread_current();
+  cur->exit_code = status;
   thread_exit ();
 }
 
 static pid_t
 syscall_exec (const char *cmd_line)
 {
-
+  pid_t pid = process_execute(cmd_line);
+  return pid;
 }
 
 static int 
@@ -282,6 +285,7 @@ syscall_write (int fd, const void *buffer, unsigned size)
   
   int size_write = -1;
   lock_acquire (&fs_lock);
+
   if (fd == 1)
     { 
       printf("writing\n");

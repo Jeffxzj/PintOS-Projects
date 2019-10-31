@@ -111,7 +111,7 @@ start_process (void *file_name_)
       if_.esp -= sizeof(int *);
       *((int *) if_.esp) = 0;
 
-      hex_dump((uintptr_t)if_.esp, if_.esp, 128, true);
+      //hex_dump((uintptr_t)if_.esp, if_.esp, 128, true);
 
     }
   /* If load failed, quit. */
