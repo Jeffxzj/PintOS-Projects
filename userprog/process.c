@@ -180,10 +180,6 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
-<<<<<<< HEAD
-=======
-
->>>>>>> 87e8efeda8ee858dbe09839246733301b1824f91
   printf ("%s: exit(%d)\n", cur->name, cur->exit_code);
   
   struct thread *parent = get_thread_by_tid (cur->parent_tid);
