@@ -101,11 +101,12 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-
     int exit_code;
-    bool visited;
-    struct semaphore wait_sema;
+    /* Owned by wait */
+    tid_t parent_tid;
     struct list child_list;             /* Child thread */ 
+    /* Owned by wait */
+
 #endif
 
     struct list fd_list;                /* List of file descriptors */
@@ -113,6 +114,16 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+/* Owned by wait */
+struct child_info{
+  tid_t tid;
+  int exit_code;
+  bool waited;
+  bool exited;
+  struct semaphore wait_sema;
+  struct list_elem child_ele;
+};
+/* Owned by wait */
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -150,4 +161,5 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+struct thread *get_thread_by_tid (tid_t tid);
 #endif /* threads/thread.h */

@@ -155,7 +155,27 @@ static void
 syscall_exit (int status)
 {      
   struct thread *cur = thread_current();
+  struct thread * parent = get_thread_by_tid (cur->parent_tid);
   cur->exit_code = status;
+  if (parent == NULL)
+    return;
+  if(list_empty(&parent->child_list) )
+    return;
+    
+  struct list_elem* iter;
+  for(iter = list_begin (&parent->child_list);
+      iter != list_end (&parent->child_list);
+      iter = list_next (iter)) 
+    {
+      struct child_info *child = list_entry(iter,struct child_info,child_ele);
+      if (child->tid == cur->tid)
+        {
+          sema_up (&child->wait_sema);
+          child->exited = true;
+          child->exit_code = status;
+          break;
+        }  
+    } 
   thread_exit ();
 }
 
