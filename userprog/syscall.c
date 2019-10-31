@@ -53,9 +53,10 @@ syscall_handler (struct intr_frame *f)
   uint32_t *esp = f->esp;            /* convert f->esp to integer pointer */
 
   int sys_code = *esp;
+  //struct thread *t = thread_current ();
+  //printf("thread :%d, syscode:%d\n",t->tid,sys_code);
   if (sys_code < 0 || !check_valid_pointer (esp, 4))
     {
-      printf ("bad pointer detected\n");
       syscall_exit (-1);
     }
 
@@ -166,9 +167,9 @@ syscall_exit (int status)
   struct thread * parent = get_thread_by_tid (cur->parent_tid);
   cur->exit_code = status;
   if (parent == NULL)
-    return;
+    thread_exit ();
   if (list_empty(&parent->child_list) )
-    return;
+    thread_exit ();
     
   struct list_elem* iter;
   for(iter = list_begin (&parent->child_list);
@@ -178,7 +179,6 @@ syscall_exit (int status)
       struct child_info *child = list_entry(iter,struct child_info,child_ele);
       if (child->tid == cur->tid)
         {
-          sema_up (&child->wait_sema);
           child->exited = true;
           child->exit_code = status;
           break;
@@ -309,12 +309,11 @@ static int
 syscall_write (int fd, const void *buffer, unsigned size)
 {  
   int size_write = -1;
-   struct file_descriptor *fd_struct = NULL;
+  struct file_descriptor *fd_struct = NULL;
   
   lock_acquire (&fs_lock);
   if (fd == 1)
     { 
-      printf("writing to console\n");
       putbuf ((char *)buffer, (size_t)size);
       size_write = size;
     }
