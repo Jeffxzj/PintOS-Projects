@@ -57,7 +57,21 @@ process_execute (const char *file_name)
   palloc_free_page (file);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
-
+  else
+    {
+      struct thread* t = get_thread_by_tid(tid);
+      t->parent_tid = thread_current ()->tid;
+      struct child_info *child = malloc (sizeof (struct child_info));
+      if (child != NULL)
+        {
+          sema_init (&child->wait_sema, 0);
+          child->tid = t->tid;
+          child->exit_code = 0;
+          child->exited = false;
+          child->waited = false;
+          list_push_back (&thread_current()->child_list, &child->child_ele);
+        }
+    }
   return tid;
 }
 
