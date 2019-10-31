@@ -17,10 +17,12 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+#include "threads/malloc.h"
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+void try_sema_up (struct thread * parent, tid_t child_tid);
+int try_sema_down (struct thread * parent, tid_t child_tid);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -50,9 +52,11 @@ process_execute (const char *file_name)
   exe_name = strtok_r(file, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exe_name, PRI_DEFAULT, start_process, fn_copy);
+
   palloc_free_page (file);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
   return tid;
 }
 
@@ -142,32 +146,11 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid)   
 {
-  //struct thread *current = thread_current ();
-  //if (child_tid == TID_ERROR)
-  // return -1;
-  /*
-  if( list_empty(&current->child_list) )
+  struct thread *current = thread_current ();
+  if (child_tid == TID_ERROR)
     return -1;
-  else 
-    {
-     struct list_elem* iter;
-     for (iter = list_begin (&current->child_list);
-          iter != list_end (&current->child_list);
-          iter = list_next (iter)) 
-          {
-            struct thread *child = list_entry (iter, struct thread, elem);
-            if (child->tid == child_tid)
-              {
-                sema_down (&child->wait_sema);
-                list_remove (iter);
-                return child->exit_code;
-              }
-              
-          }
-    }
-  */
-  while (true)
-    thread_yield ();
+  
+  return try_sema_down (current, child_tid);
 }
 
 /* Free the current process's resources. */
@@ -182,7 +165,11 @@ process_exit (void)
      to the kernel-only page directory. */
   pd = cur->pagedir;
   printf ("%s: exit(%d)\n", cur->name, cur->exit_code);
-  //sema_up(&cur->wait_sema);
+  struct thread *parent = get_thread_by_tid (cur->parent_tid);
+  if (parent != NULL)
+      try_sema_up (parent, cur->tid);
+
+  #endif
 
   if (pd != NULL) 
     {
@@ -203,15 +190,11 @@ process_exit (void)
 /* Sets up the CPU for running user code in the current
    thread.
    This function is called on every context switch. */
-void
-process_activate (void)
-{
   struct thread *t = thread_current ();
 
   /* Activate thread's page tables. */
   pagedir_activate (t->pagedir);
 
-  /* Set thread's kernel stack for use in processing
      interrupts. */
   tss_update ();
 }
@@ -549,3 +532,49 @@ install_page (void *upage, void *kpage, bool writable)
 }
 
 
+int 
+try_sema_down (struct thread * parent, tid_t child_tid)
+{
+  if( list_empty(&parent->child_list) )
+    return -1;
+  else 
+    {
+     struct list_elem* iter;
+     for (iter = list_begin (&parent->child_list);
+          iter != list_end (&parent->child_list);
+          iter = list_next (iter)) 
+          {
+            struct child_info *child = list_entry (iter, struct child_info, child_ele);
+            if (child->tid == child_tid)
+              {
+                sema_down (&child->wait_sema);
+                child->waited = true;
+                return child->exit_code;
+              }  
+          }
+    }
+  return -1; 
+}
+
+void
+try_sema_up (struct thread * parent, tid_t child_tid)
+{
+  if( list_empty(&parent->child_list) )
+    return;
+  else 
+    {
+     struct list_elem* iter;
+     for (iter = list_begin (&parent->child_list);
+          iter != list_end (&parent->child_list);
+          iter = list_next (iter)) 
+          {
+            struct child_info *child = list_entry (iter, struct child_info, child_ele);
+            if (child->tid == child_tid)
+              {
+                sema_up (&child->wait_sema);
+                child->exited = true;
+                return;
+              }  
+          }
+    } 
+}

@@ -260,7 +260,6 @@ struct thread *
 thread_current (void) 
 {
   struct thread *t = running_thread ();
-  
   /* Make sure T is really a thread.
      If either of these assertions fire, then your thread may
      have overflowed its stack.  Each thread has less than 4 kB
@@ -470,11 +469,13 @@ init_thread (struct thread *t, const char *name, int priority)
 
   #ifdef USERPROG
   t->file_num = 2;
-  t->exit_code = 0;
-  t->visited = 0;
-  list_init (&t->child_list);
   list_init (&t->fd_list);
-  sema_init (&t->wait_sema, 0);
+
+  /* Owned by wait */
+  list_init (&t->child_list);
+  t->exit_code = 0;
+
+  /* Owned by wait */
   #endif
 
   old_level = intr_disable ();
@@ -595,3 +596,23 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+struct thread *
+get_thread_by_tid (tid_t tid)
+{
+  if (tid == TID_ERROR)
+    return NULL;
+
+  struct thread *t;
+  struct list_elem *iter;
+
+  for (iter = list_head (&all_list); 
+       iter != list_tail (&all_list); 
+       iter = list_next(iter))
+       {
+        t = list_entry (iter, struct thread, allelem);
+        if (t->tid == tid && t->status != THREAD_DYING)
+          return t;
+       }
+  return NULL;
+}
