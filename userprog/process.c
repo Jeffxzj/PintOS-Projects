@@ -140,12 +140,12 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)   
+process_wait (tid_t child_tid)   
 {
-  struct thread *current = thread_current ();
-  if (child_tid == TID_ERROR)
-    return -1;
-  
+  //struct thread *current = thread_current ();
+  //if (child_tid == TID_ERROR)
+  // return -1;
+  /*
   if( list_empty(&current->child_list) )
     return -1;
   else 
@@ -165,7 +165,9 @@ process_wait (tid_t child_tid UNUSED)
               
           }
     }
-  return -1;
+  */
+  while (true)
+    thread_yield ();
 }
 
 /* Free the current process's resources. */
@@ -180,7 +182,7 @@ process_exit (void)
      to the kernel-only page directory. */
   pd = cur->pagedir;
   printf ("%s: exit(%d)\n", cur->name, cur->exit_code);
-  sema_up(&cur->wait_sema);
+  //sema_up(&cur->wait_sema);
 
   if (pd != NULL) 
     {
