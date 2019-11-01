@@ -471,7 +471,9 @@ init_thread (struct thread *t, const char *name, int priority)
   /* Owned by wait */
   list_init (&t->child_list);
   t->exit_code = 0;
-
+  t->exe_file = NULL;
+  t->child_load = 0;
+  sema_init (&t->load_sema,0);
   /* Owned by wait */
   #endif
 

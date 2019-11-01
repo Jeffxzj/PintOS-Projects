@@ -103,10 +103,12 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     int exit_code;
     /* Owned by wait */
+    struct file *exe_file;
     tid_t parent_tid;
     struct list child_list;             /* Child thread */ 
+    struct semaphore load_sema;
     /* Owned by wait */
-
+    int child_load;
 
 #endif
 
