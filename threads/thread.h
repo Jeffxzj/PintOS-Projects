@@ -103,7 +103,10 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     int exit_code;
     /* Owned by wait */
+<<<<<<< HEAD
 
+=======
+>>>>>>> 56d9caa5ef2034c68fe584d9e9028e309ba4386f
     tid_t parent_tid;
     struct list child_list;             /* Child thread */ 
     /* Owned by wait */

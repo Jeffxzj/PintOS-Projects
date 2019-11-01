@@ -18,7 +18,7 @@ static void syscall_handler (struct intr_frame *);
 
 /* Syscall functions */
 static void syscall_halt (void);
-static void syscall_exit (int status);
+//static void syscall_exit (int status);
 static pid_t syscall_exec (const char *cmd_line);
 static int syscall_wait (pid_t pid);
 static bool syscall_create (const char *file, unsigned initial_size);
@@ -57,10 +57,9 @@ syscall_handler (struct intr_frame *f)
 
   
   int sys_code = *esp;
-  printf ("%d\n",esp);
-  if (sys_code < SYSCODE_MIN || sys_code > SYSCODE_MAX 
-      || !check_valid_pointer (f->esp, 4))
-      syscall_exit (-1);
+  if (sys_code < SYSCODE_MIN || sys_code > SYSCODE_MAX || esp == NULL
+      || !check_valid_pointer (f->esp + 4, 4))
+    syscall_exit (-1);
 
   switch (sys_code)
     {
@@ -174,7 +173,7 @@ syscall_halt (void)
    process’s parent waits for it (see below), this is the status that will be 
    returned. Conventionally, a status of 0 indicates success and nonzero values 
    indicate errors.*/
-static void
+void
 syscall_exit (int status)
 {      
   
@@ -187,9 +186,9 @@ syscall_exit (int status)
     thread_exit ();
   
   struct list_elem* iter;
-  for(iter = list_begin (&parent->child_list);
-      iter != list_end (&parent->child_list);
-      iter = list_next (iter)) 
+  for (iter = list_begin (&parent->child_list);
+       iter != list_end (&parent->child_list);
+       iter = list_next (iter)) 
     {
       struct child_info *child = list_entry(iter,struct child_info,child_ele);
       if (child->tid == cur->tid)
@@ -392,7 +391,7 @@ check_valid_pointer (void *ptr, uint8_t argc)
 {
   struct thread *cur = thread_current ();
   uint32_t *iter = ptr;
-  for (uint8_t i = 0; i < argc; i++, iter++)
+  for (uint8_t i = 0; i < argc; i++)
     {
       /* Check if ptr is null and is a user virtual address */
       if (!is_user_vaddr (iter))
