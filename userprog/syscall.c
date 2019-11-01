@@ -163,6 +163,7 @@ syscall_halt (void)
 static void
 syscall_exit (int status)
 {      
+  
   struct thread *cur = thread_current();
   struct thread * parent = get_thread_by_tid (cur->parent_tid);
   cur->exit_code = status;
@@ -170,7 +171,7 @@ syscall_exit (int status)
     thread_exit ();
   if (list_empty(&parent->child_list) )
     thread_exit ();
-    
+  
   struct list_elem* iter;
   for(iter = list_begin (&parent->child_list);
       iter != list_end (&parent->child_list);
@@ -308,7 +309,7 @@ syscall_read (int fd, void *buffer, unsigned size)
 static int 
 syscall_write (int fd, const void *buffer, unsigned size)
 {  
-  int size_write = -1;
+  int size_write = 0 ;
   struct file_descriptor *fd_struct = NULL;
   
   lock_acquire (&fs_lock);
@@ -320,9 +321,11 @@ syscall_write (int fd, const void *buffer, unsigned size)
   else
     {
       fd_struct = find_opened_file (thread_current(), fd);
+
       if (fd_struct != NULL)
         size_write = file_write (fd_struct->file, buffer, size);
     }
+  
   lock_release (&fs_lock);
   return size_write;
 }
