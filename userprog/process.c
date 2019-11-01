@@ -8,7 +8,6 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
-#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -53,7 +52,6 @@ process_execute (const char *file_name)
     
   strlcpy (file, file_name, PGSIZE);
   exe_name = strtok_r(file, " ", &save_ptr);
-  //printf("exe_name: %s\n", exe_name);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exe_name, PRI_DEFAULT, start_process, fn_copy);
 
@@ -72,7 +70,10 @@ process_execute (const char *file_name)
           child->exit_code = 0;
           child->waited = false;
           list_push_back (&thread_current()->child_list, &child->child_ele);
+          
+        }
     }
+  return tid;
 }
 
 /* A thread function that loads a user process and starts it
