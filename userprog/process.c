@@ -66,16 +66,13 @@ process_execute (const char *file_name)
       t->parent_tid = thread_current ()->tid;
       struct child_info *child = malloc (sizeof (struct child_info));
       if (child != NULL)
-        {
+        { 
           sema_init (&child->wait_sema, 0);
           child->tid = tid;
           child->exit_code = 0;
-          child->exited = false;
           child->waited = false;
           list_push_back (&thread_current()->child_list, &child->child_ele);
-        }
     }
-  return tid;
 }
 
 /* A thread function that loads a user process and starts it
@@ -89,14 +86,24 @@ start_process (void *file_name_)
   char *exe_name, *save_ptr, *token;
   char *argv[256];
   int argc = 1;
+  struct thread * cur = thread_current();
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   exe_name = strtok_r(file_name, " ", &save_ptr);
+
   success = load (exe_name, &if_.eip, &if_.esp);
 
+  struct thread * parent = get_thread_by_tid (cur->parent_tid);
+
+  if (success)
+    parent->child_load = 1;
+  else 
+    parent->child_load = -1;
+  sema_up(&parent->load_sema);
   if (success)
     {
       /* Push the exe_name */
@@ -136,10 +143,11 @@ start_process (void *file_name_)
     }
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success)
-    {
-      syscall_exit (-1);
-    }
+  if (!success){
+    cur -> exit_code = -1;
+    thread_exit ();
+  }
+    
   
 
   /* Start the user process by simulating a return from an
@@ -318,7 +326,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -569,7 +576,7 @@ try_sema_down (struct thread *parent, tid_t child_tid)
           iter = list_next (iter)) 
           { 
             struct child_info *child = list_entry (iter, struct child_info, child_ele);
-            if (child->tid == child_tid && !child->waited && !child->exited)
+            if (child->tid == child_tid && !child->waited )
               {       
 
                 sema_down (&child->wait_sema);
@@ -598,7 +605,6 @@ try_sema_up (struct thread * parent, tid_t child_tid)
           if (child->tid == child_tid)
             {
               sema_up (&child->wait_sema);
-              child->exited = true;
               return;
             }  
         }

@@ -193,7 +193,6 @@ syscall_exit (int status)
       struct child_info *child = list_entry(iter,struct child_info,child_ele);
       if (child->tid == cur->tid)
         {
-          child->exited = true;
           child->exit_code = status;
           break;
         }  
@@ -210,10 +209,17 @@ syscall_exit (int status)
 static pid_t
 syscall_exec (const char *cmd_line)
 {
+  pid_t pid;
   if (cmd_line == NULL)
     return -1;
   lock_acquire (&fs_lock);
-  pid_t pid = process_execute (cmd_line);
+
+  pid = process_execute (cmd_line);
+  sema_down (&thread_current()->load_sema);
+
+  if (thread_current() -> child_load == -1)
+    pid = -1;
+
   lock_release (&fs_lock);
   return pid;
 }
