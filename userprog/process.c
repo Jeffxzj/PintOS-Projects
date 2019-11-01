@@ -24,6 +24,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 void try_sema_up (struct thread * parent, tid_t child_tid);
 int try_sema_down (struct thread * parent, tid_t child_tid);
 void free_child_list (struct thread * f);
+void free_all_open_file (struct thread *f);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -199,7 +200,8 @@ process_exit (void)
 
   free_child_list (cur);
 
-
+  free_all_open_file (cur);
+  
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -630,4 +632,23 @@ free_child_list (struct thread * f)
       iter = next;
     }
 
+}
+
+void 
+free_all_open_file (struct thread *f)
+{
+  struct list_elem *iter = list_begin (&f->fd_list);
+
+  while (iter != list_end (&f->fd_list))
+    {
+      struct list_elem *next;
+      struct file_descriptor *file_d;
+
+      next = list_next (iter);
+      file_d = list_entry (iter,struct file_descriptor, elem);
+      list_remove (iter);
+      file_close (file_d->file);
+      free (file_d);
+      iter = next;
+    }
 }
