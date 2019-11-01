@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -52,6 +53,7 @@ process_execute (const char *file_name)
     
   strlcpy (file, file_name, PGSIZE);
   exe_name = strtok_r(file, " ", &save_ptr);
+  //printf("exe_name: %s\n", exe_name);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exe_name, PRI_DEFAULT, start_process, fn_copy);
 
@@ -71,7 +73,6 @@ process_execute (const char *file_name)
           child->exited = false;
           child->waited = false;
           list_push_back (&thread_current()->child_list, &child->child_ele);
-
         }
     }
   return tid;
@@ -88,7 +89,6 @@ start_process (void *file_name_)
   char *exe_name, *save_ptr, *token;
   char *argv[256];
   int argc = 1;
-
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -133,12 +133,13 @@ start_process (void *file_name_)
       *((int *) if_.esp) = 0;
 
       //hex_dump((uintptr_t)if_.esp, if_.esp, 128, true);
-
     }
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  if (!success)
+    {
+      syscall_exit (-1);
+    }
   
 
   /* Start the user process by simulating a return from an
