@@ -103,7 +103,6 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     int exit_code;
     /* Owned by wait */
-    struct lock child_lock;
     tid_t parent_tid;
     struct list child_list;             /* Child thread */ 
     /* Owned by wait */

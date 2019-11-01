@@ -565,7 +565,6 @@ try_sema_down (struct thread *parent, tid_t child_tid)
           iter != list_end (&parent->child_list);
           iter = list_next (iter)) 
           { 
-            lock_acquire (&parent->child_lock);
             struct child_info *child = list_entry (iter, struct child_info, child_ele);
             if (child->tid == child_tid && !child->waited && !child->exited)
               {       
@@ -574,7 +573,6 @@ try_sema_down (struct thread *parent, tid_t child_tid)
                 child->waited = true;
                 return child->exit_code;
               } 
-            lock_release (&parent->child_lock);
           }
     }
   return -1; 
