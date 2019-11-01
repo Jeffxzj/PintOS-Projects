@@ -186,9 +186,8 @@ process_exit (void)
     try_sema_up(parent,cur->tid);
 
   free_child_list (cur);
-  if (cur->exe_file != NULL)
-    file_allow_write(cur->exe_file);
-    
+
+
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -401,11 +400,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  if (success)
-    {
-      t->exe_file = file;
-      file_deny_write (file);
-    }
   file_close (file);
   return success;
 }
