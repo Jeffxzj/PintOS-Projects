@@ -108,7 +108,6 @@ struct thread
     struct list child_list;             /* Child thread */ 
     /* Owned by wait */
 
-    struct file *exe_file;
 
 #endif
 

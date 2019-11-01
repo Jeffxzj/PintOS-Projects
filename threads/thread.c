@@ -472,7 +472,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init (&t->child_list);
   t->exit_code = 0;
   lock_init (&t->child_lock);
-  t->exe_file = NULL;
+
   /* Owned by wait */
   #endif
 
