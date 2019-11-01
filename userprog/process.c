@@ -101,7 +101,7 @@ start_process (void *file_name_)
 
   struct thread * parent = get_thread_by_tid (cur->parent_tid);
 
-  if (success)
+  if (success) 
     parent->child_load = 1;
   else 
     parent->child_load = -1;
@@ -201,7 +201,8 @@ process_exit (void)
   free_child_list (cur);
 
   free_all_open_file (cur);
-  
+  if (cur->exe_file != NULL)
+    file_allow_write (cur->exe_file);
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -412,8 +413,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
   success = true;
 
  done:
+  if (success)
+    {
+      t->exe_file = file;
+      file_deny_write (file);
+    }
+  else
+    file_close (file);
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //file_close (file);
   return success;
 }
 
