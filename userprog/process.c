@@ -48,6 +48,7 @@ process_execute (const char *file_name)
       palloc_free_page (fn_copy);
       return TID_ERROR;
     }
+
     
   strlcpy (file, file_name, PGSIZE);
   exe_name = strtok_r(file, " ", &save_ptr);
@@ -162,6 +163,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid)   
 {
+
   struct thread *current = thread_current ();
   if (child_tid == TID_ERROR)
     return -1;
@@ -172,7 +174,7 @@ process_wait (tid_t child_tid)
 void
 process_exit (void)
 {
-  
+
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
@@ -565,7 +567,6 @@ try_sema_down (struct thread *parent, tid_t child_tid)
           iter != list_end (&parent->child_list);
           iter = list_next (iter)) 
           { 
-            lock_acquire (&parent->child_lock);
             struct child_info *child = list_entry (iter, struct child_info, child_ele);
             if (child->tid == child_tid && !child->waited && !child->exited)
               {       
@@ -574,7 +575,6 @@ try_sema_down (struct thread *parent, tid_t child_tid)
                 child->waited = true;
                 return child->exit_code;
               } 
-            lock_release (&parent->child_lock);
           }
     }
   return -1; 

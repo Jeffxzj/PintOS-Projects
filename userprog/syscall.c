@@ -55,7 +55,9 @@ syscall_handler (struct intr_frame *f)
 
   uint32_t *esp = f->esp;            /* convert f->esp to integer pointer */
 
+  
   int sys_code = *esp;
+  printf ("%d\n",esp);
   if (sys_code < SYSCODE_MIN || sys_code > SYSCODE_MAX 
       || !check_valid_pointer (f->esp, 4))
       syscall_exit (-1);
