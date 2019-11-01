@@ -165,7 +165,6 @@ process_wait (tid_t child_tid)
   struct thread *current = thread_current ();
   if (child_tid == TID_ERROR)
     return -1;
-
   return try_sema_down (current, child_tid);
 }
 
@@ -186,6 +185,10 @@ process_exit (void)
   if (parent != NULL)
     try_sema_up(parent,cur->tid);
 
+  free_child_list (cur);
+  if (cur->exe_file != NULL)
+    file_allow_write(cur->exe_file);
+    
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -314,6 +317,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
+
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -397,6 +401,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  if (success)
+    {
+      t->exe_file = file;
+      file_deny_write (file);
+    }
   file_close (file);
   return success;
 }
@@ -561,14 +570,17 @@ try_sema_down (struct thread *parent, tid_t child_tid)
      for (iter = list_begin (&parent->child_list);
           iter != list_end (&parent->child_list);
           iter = list_next (iter)) 
-          {
+          { 
+            lock_acquire (&parent->child_lock);
             struct child_info *child = list_entry (iter, struct child_info, child_ele);
             if (child->tid == child_tid && !child->waited && !child->exited)
-              {                
+              {       
+
                 sema_down (&child->wait_sema);
                 child->waited = true;
                 return child->exit_code;
-              }  
+              } 
+            lock_release (&parent->child_lock);
           }
     }
   return -1; 
@@ -603,12 +615,17 @@ free_child_list (struct thread * f)
 {
   if (f == NULL || list_empty (&f->child_list))
     return;
-  struct list_elem *iter;
-  for (iter = list_begin (&f->child_list);
-       iter != list_end (&f->child_list);
-       iter = list_next (iter))
+  struct list_elem *iter = list_begin (&f->child_list);;
+  while (iter != list_end (&f->child_list))
     {
-      struct child_info *child = list_entry (iter, struct child_info, child_ele);
+      struct list_elem *next;
+      struct child_info *child;
+
+      next = list_next (iter);
+      child = list_entry (iter, struct child_info, child_ele);
+      list_remove (iter);
       free (child);
+      iter = next;
     }
+
 }
