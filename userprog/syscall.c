@@ -53,8 +53,6 @@ syscall_handler (struct intr_frame *f)
   uint32_t *esp = f->esp;            /* convert f->esp to integer pointer */
 
   int sys_code = *esp;
-  //struct thread *t = thread_current ();
-  //printf("thread :%d, syscode:%d\n",t->tid,sys_code);
   if (sys_code < 0 || !check_valid_pointer (esp, 4))
     {
       syscall_exit (-1);
@@ -168,7 +166,7 @@ syscall_exit (int status)
   cur->exit_code = status;
   if (parent == NULL)
     thread_exit ();
-  if (list_empty(&parent->child_list) )
+  if (list_empty (&parent->child_list) )
     thread_exit ();
     
   struct list_elem* iter;
