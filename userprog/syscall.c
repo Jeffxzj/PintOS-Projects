@@ -14,7 +14,6 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 
-
 static void syscall_handler (struct intr_frame *);
 
 /* Syscall functions */
@@ -33,11 +32,15 @@ static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
 
 /* Helper functions */
-static bool check_valid_pointer (uint32_t *esp, uint8_t argc);
+static bool check_valid_pointer (void *ptr, uint8_t argc);
+static bool check_valid_string (char *str);
 static struct file_descriptor *find_opened_file (struct thread *t, int fd);
 
 /* Lock to protect file system operations. */
 static struct lock fs_lock;      
+
+static const int SYSCODE_MIN = 0;
+static const int SYSCODE_MAX = 19;
 
 void
 syscall_init (void) 
@@ -53,10 +56,9 @@ syscall_handler (struct intr_frame *f)
   uint32_t *esp = f->esp;            /* convert f->esp to integer pointer */
 
   int sys_code = *esp;
-  if (sys_code < 0 || !check_valid_pointer (esp, 4))
-    {
+  if (sys_code < SYSCODE_MIN || sys_code > SYSCODE_MAX 
+      || !check_valid_pointer (f->esp, 4))
       syscall_exit (-1);
-    }
 
   switch (sys_code)
     {
@@ -74,6 +76,8 @@ syscall_handler (struct intr_frame *f)
     case SYS_EXEC:
       {
         char *cmd_line = (char *)*(esp + 1);
+        if (!check_valid_string (cmd_line))
+          syscall_exit (-1);
         f->eax = (uint32_t) syscall_exec (cmd_line);
         break;
       }
@@ -87,18 +91,24 @@ syscall_handler (struct intr_frame *f)
       {
         char *file = (char *)*(esp + 1);
         unsigned initial_size = *(esp + 2);
+        if (!check_valid_string (file))
+          syscall_exit (-1);
         f->eax = (uint32_t) syscall_create (file, initial_size);
         break;
       }
     case SYS_REMOVE:
       {
         char *file = (char *)*(esp + 1);
+        if (!check_valid_string (file))
+          syscall_exit (-1);
         f->eax = (uint32_t) syscall_remove (file);
         break;
       } 
     case SYS_OPEN:
       {
         char *file = (char *)*(esp + 1);
+        if (!check_valid_string (file))
+          syscall_exit (-1);
         f->eax = (uint32_t) syscall_open (file);
         break;
       }
@@ -113,6 +123,8 @@ syscall_handler (struct intr_frame *f)
         int fd = *(esp + 1);
         void *buffer = (void *)*(esp + 2);
         unsigned size = *(esp + 3);
+        if (!check_valid_pointer (buffer + size, 1))
+          syscall_exit (-1);
         f->eax = (uint32_t) syscall_read (fd, buffer, size);
         break;
       }
@@ -121,6 +133,8 @@ syscall_handler (struct intr_frame *f)
         int fd = *(esp + 1);
         void *buffer = (void *)*(esp + 2);
         unsigned size = *(esp + 3);
+        if (!check_valid_pointer (buffer + size, 1))
+          syscall_exit (-1);
         f->eax = (uint32_t) syscall_write (fd, buffer, size);
         break;
       }
@@ -163,7 +177,7 @@ syscall_exit (int status)
 {      
   
   struct thread *cur = thread_current();
-  struct thread * parent = get_thread_by_tid (cur->parent_tid);
+  struct thread *parent = get_thread_by_tid (cur->parent_tid);
   cur->exit_code = status;
   if (parent == NULL)
     thread_exit ();
@@ -195,7 +209,11 @@ syscall_exit (int status)
 static pid_t
 syscall_exec (const char *cmd_line)
 {
+  if (cmd_line == NULL)
+    return -1;
+  lock_acquire (&fs_lock);
   pid_t pid = process_execute (cmd_line);
+  lock_release (&fs_lock);
   return pid;
 }
 
@@ -238,28 +256,26 @@ static int
 syscall_open (const char *file)
 {
   struct file_descriptor *fd_struct = NULL;
-  int status = -1;
+  struct thread *cur = thread_current ();
   
   lock_acquire (&fs_lock);
-  struct thread *cur = thread_current ();
   struct file *f = filesys_open (file);
+  lock_release (&fs_lock);
+  
   if (f == NULL)
-    return status;
+    return -1;
+  
   fd_struct = malloc (sizeof (struct file_descriptor));
   fd_struct->file = f;
   fd_struct->fd = cur->file_num++;
   list_push_back (&cur->fd_list, &fd_struct->elem);
-  status = fd_struct->fd;
-  lock_release (&fs_lock);
-  
-  return status;
+  return fd_struct->fd;
 }
 
 /* Returns the size, in bytes, of the file open as fd. */
 static int 
 syscall_filesize (int fd)
 {
-
   int size = -1;
   struct file_descriptor *fd_struct = NULL;
   fd_struct = find_opened_file (thread_current(), fd);
@@ -281,22 +297,20 @@ syscall_read (int fd, void *buffer, unsigned size)
 {
   /* TODO:
     maybe check if (buffer+size) is valid later */
-  int size_read = -1;
+  int size_read = 0;
   struct file_descriptor *fd_struct = NULL;
-  lock_acquire (&fs_lock);
   if (fd == 0)
     {
       uint8_t *buf = buffer;
       for (unsigned int i = 0; i < size; i++)
         buf[i] = input_getc ();
-      size_read = size;
+      return size;
     }
-  else
-    {
-      fd_struct = find_opened_file (thread_current(), fd);
-      if (fd_struct != NULL)
-        size_read = file_read (fd_struct->file, buffer, size);
-    }
+  fd_struct = find_opened_file (thread_current(), fd);
+  if (fd_struct == NULL || fd_struct->file == NULL)
+    return -1;
+  lock_acquire (&fs_lock);
+  size_read = file_read (fd_struct->file, buffer, size);
   lock_release (&fs_lock);
   return size_read;
 }
@@ -310,20 +324,18 @@ syscall_write (int fd, const void *buffer, unsigned size)
   int size_write = 0 ;
   struct file_descriptor *fd_struct = NULL;
   
-  lock_acquire (&fs_lock);
   if (fd == 1)
     { 
       putbuf ((char *)buffer, (size_t)size);
-      size_write = size;
-    }
-  else
-    {
-      fd_struct = find_opened_file (thread_current(), fd);
-
-      if (fd_struct != NULL)
-        size_write = file_write (fd_struct->file, buffer, size);
+      return size;
     }
   
+  fd_struct = find_opened_file (thread_current(), fd);
+  if (fd_struct == NULL || fd_struct->file == NULL)
+    return -1;
+  
+  lock_acquire (&fs_lock);
+  size_write = file_write (fd_struct->file, buffer, size);
   lock_release (&fs_lock);
   return size_write;
 }
@@ -374,10 +386,10 @@ syscall_close (int fd)
 
 /* Helper functions */
 static bool
-check_valid_pointer (uint32_t *esp, uint8_t argc)
+check_valid_pointer (void *ptr, uint8_t argc)
 {
   struct thread *cur = thread_current ();
-  uint32_t *iter = esp;
+  uint32_t *iter = ptr;
   for (uint8_t i = 0; i < argc; i++, iter++)
     {
       /* Check if ptr is null and is a user virtual address */
@@ -388,6 +400,21 @@ check_valid_pointer (uint32_t *esp, uint8_t argc)
         return false;
     }
   return true;
+}
+
+static bool
+check_valid_string (char *str)
+{
+  if (str == NULL)
+    return false;
+  for (char *s = str; ; s++)
+    {
+      if (!check_valid_pointer (s,1))
+        return false;
+      if (*s == '\0')
+        return true;
+    }
+  return false;
 }
 
 /* Search file in fd_list by fd number, return its file descriptor */
