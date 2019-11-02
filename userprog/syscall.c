@@ -218,7 +218,7 @@ syscall_exec (const char *cmd_line)
   lock_release (&fs_lock);
   /* Wait until the child thread load */
   sema_down (&thread_current()->load_sema);
-  /* If load fail, return -1 */
+  /* If load fails, return -1 */
   if (thread_current() -> child_load == -1)
     pid = -1;
 
@@ -403,7 +403,7 @@ check_valid_pointer (void *ptr, uint8_t argc)
   uint32_t *iter = ptr;
   for (uint8_t i = 0; i < argc; i++, iter++)
     {
-      /* Check if ptr is null and is a user virtual address */
+      /* Check if ptr is in user virtual address */
       if (!is_user_vaddr (iter))
         return false;
       /* Check if ptr is allocated within the current thread's pages */      

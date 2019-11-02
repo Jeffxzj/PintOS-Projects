@@ -78,7 +78,7 @@ process_execute (const char *file_name)
           child->tid = tid;
           child->exit_code = 0;
           child->waited = false;
-          list_push_back (&thread_current()->child_list, &child->child_ele);
+          list_push_back (&thread_current ()->child_list, &child->child_ele);
         }
       /* Owned by wait: Initialize child_info struct */
     }
@@ -121,14 +121,14 @@ start_process (void *file_name_)
     {
       /* Push the exe_name */
       if_.esp -= strlen(exe_name) + 1;
-      memcpy (if_.esp, exe_name, strlen(exe_name) + 1);
+      memcpy (if_.esp, exe_name, strlen (exe_name) + 1);
       argv[0] = if_.esp;
 
       /* Push all the argv */
-      while ((token = strtok_r(NULL, " ", &save_ptr)) != NULL)
+      while ((token = strtok_r (NULL, " ", &save_ptr)) != NULL)
         {
           if_.esp -= strlen(token) + 1;
-          memcpy (if_.esp, token, strlen(token) + 1);
+          memcpy (if_.esp, token, strlen (token) + 1);
           argv[argc++] = if_.esp;
         }
 
@@ -144,12 +144,12 @@ start_process (void *file_name_)
       for (int i = argc-1; i >= 0; i--)
         {
           if_.esp -= sizeof(char*);
-          memcpy (if_.esp, &argv[i], sizeof(char*));
+          memcpy (if_.esp, &argv[i], sizeof (char*));
         }
         
       /* Push address of argv[0] */
       if_.esp -= sizeof(char**);
-      *((char **) if_.esp) = if_.esp + sizeof(char **);
+      *((char **) if_.esp) = if_.esp + sizeof (char **);
 
       /* Push argc */
       if_.esp -= sizeof(int);
@@ -165,8 +165,7 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success){
-    cur -> exit_code = -1;     /* If loading is not success, 
-                                  exit status should be -1 */
+    cur -> exit_code = -1;   /* If loading fails, exit status should be -1 */
     thread_exit ();
   }
     
@@ -198,7 +197,7 @@ process_wait (tid_t child_tid)
   struct thread *current = thread_current ();
   if (child_tid == TID_ERROR)
     return -1;
-  /* Use sema_down to wait child thread, see definition below*/ 
+  /* Use sema_down to wait child thread, see definition below. */ 
   return try_sema_down (current, child_tid);
 }
 
@@ -604,7 +603,6 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-
 int 
 try_sema_down (struct thread *parent, tid_t child_tid)
 {
@@ -675,7 +673,6 @@ free_child_list (struct thread * f)
       free (child);
       iter = next;
     }
-
 }
 
 /* Iterate to close all the open file and release file descriptors */
