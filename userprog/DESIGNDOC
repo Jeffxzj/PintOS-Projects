@@ -19,6 +19,7 @@ Runze Yuan <yuanrz@shanghaitech.edu.cn>
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
+
 https://github.com/Wang-GY/pintos-project2
 https://github.com/codyjack/OS-pintos
 
@@ -54,14 +55,83 @@ None.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct thread
+  {
+    #ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+
+    int exit_code;                      /* Record the status of exiting */
+
+    tid_t parent_tid;                   /* Record the parent tid */
+    struct list child_list;             /* Child threads, list of child_info */ 
+
+    struct file *exe_file;              /* Record my own exec file, used in 
+                                            deny_write and allow_write */
+
+    int child_load;                     /* Determine if the child thread load
+                                           successfully  */
+    struct semaphore load_sema;         /* Sychronizatize when loading */
+    /* Owned by child status*/
+    struct list fd_list;                /* List of file descriptors */
+    int file_num;                       /* Number of files opened */
+    #endif
+  }
+
+struct child_info
+  {
+    tid_t tid;                          /* Child tid */
+    int exit_code;                      /* Child exit status */
+    bool waited;                        /* If the child has been waited */
+    struct semaphore wait_sema;         /* Parent should wait this sema */
+    struct list_elem child_ele;         /* Used in child_list */
+  };
+
+/* File descriptor struct used in filesys related syscalls, owend by thread */
+struct file_descriptor
+  {
+    int fd;                             /* Handle number of fd */
+    struct file *file;                  
+    struct list_elem elem;  
+  };
+
+/* Lock to protect file system operations. */
+static struct lock fs_lock;   
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
+
+Each open file has its own file descriptor in our implementation. The open
+files are stored in a list inside each thread opening it, which is unique 
+within a single process not the entire OS. This design may enlarge the memory 
+cost of each thread struct, but is convenient when dealing with syscalls like 
+exit(), since we can easily know which file to close when a process exits.
 
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+
+In syscall_handler we have implemented "Bad Pointer Checking" to ensure that
+"buffer" and "buffer+size" are all valid user addresses. Thus, in read() and
+write() we do not need to check the passed pointers.
+
+For read():
+If fd is STDOUT_FILENO (1), return -1.
+If fd is STDIN_FILENO (0), we call input_getc() to read std input to buffer
+and return size. Else, we find fd in fd_list in the current thread by fd_num
+, if we cannot find it just return -1. If we find it we call file_read() to 
+get the size we actually read. Note that when calling filesys functions, we
+need to put it in a critical section, so here our fs_lock plays its role. 
+
+For write():
+If fd is STDIN_FILENO (0), return -1.
+If fd is STDOUT_FILENO (1), we call putbuf() once to do the std out to console. 
+Else, we find the file by fd_num, if we cannot find file, return -1. Else write 
+size of bytes to buffer in the critical section by calling file_write().Finally
+, return the size we wrote.
+
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -69,6 +139,16 @@ None.
 >> (e.g. calls to pagedir_get_page()) that might result?  What about
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
+
+For 4096 bytes of data:
+The least number is 1, if all bytes are in one page. It may also span 2 pages,
+if the some bytes are in one page and some are in another. Thus, the greatest
+number of inspections is 2.
+
+For 2 bytes of data:
+The least number is 1, and is very likely that it spans only 1 page. It is very
+unlikely that it spans 2 pages, but it is still possible. Therefore, the 
+greatest number of inspection is 2, the least number is 1.
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
@@ -86,6 +166,42 @@ None.
 >> allocated resources (locks, buffers, etc.) are freed?  In a few
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
+
+Syscall_handler() in our implementation will check the validity of passed-in 
+pointers before calling any syscall functions. Two helper functions we used:
+
+static bool check_valid_pointer (void *ptr, uint8_t argc);
+static bool check_valid_string (char *str);
+
+The first function we call in syscall_handler(), it will checks esp and the 
+address of the syscall arguments after it. If any of these pointers is not in 
+user address or is not mapped to the thread page directory, it is considered as 
+a bad pointer and we will call syscall_exit(-1). 
+
+The second function is to deal with bad strings, it is called in before calling
+the syscalls which has strings to pass in. 
+Take syscall_open() as an example, we need to malloc space in this syscall. 
+However, it is called only when the passed-in filename is valid, and allocated
+space will be freed when file is closed or when process exit.
+
+To deal with lock issue, we have made efforts to reduce the code in the
+critical section, we usually only keep functions in file.h, filesys.h in the
+critical section, these functions will not cause process to terminate. Thus,
+we will not need to release lock if an error occurs since all the errors occur
+before we acquire a lock.
+
+To ensure that we have freed all the allocated resources, we free all the 
+resources of child process in syscall_exit() and close and free all file
+descriptors in process_exit(), which is called inside syscall_exit(). Since
+when any error occured, syscall_exit(-1) will be called. Therefore, we can
+make sure that all temporarily allocated resources are freed.
+
+In addition, there are cases that our bad-pointer detection functions cannot 
+handle. In these cases, we let exception.c do the job for us. Since bad pointer
+will cause page fault, we modify codes in exception.c. In spite of just kill
+the current process, we use syscall_exit(-1) to terminate the process when 
+page fault addr is accessed by user and is kernel address. Since we call
+syscall_exit(-1), all the temporarily allocated resources are freed.
 
 ---- SYNCHRONIZATION ----
 
@@ -106,11 +222,26 @@ None.
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
+Validating the pointer before using it is much easier for use to implement
+the bad pointer checking. We do not clearly know how to really modify the 
+code in exception.c with the help of get_user() and put_user() provided by
+the doc. So we simply implement the straightforward method.
+
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
+Advantages:
+1. Easy to know open files belong to which thread, make things simple when 
+closing files of a specific thread.
+
+Disadvantages:
+1. Consume thread struct's space, when there are lot threads, thread context
+switch may be slow.
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+We didn't change the mapping.
 
 			   SURVEY QUESTIONS
 			   ================
@@ -126,8 +257,9 @@ the quarter.
 
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?
+
 The syscall part, especially dealing with wait() and exec() has gave us greater
-insight into the real implementation of process functions in OS.
+insights into the real implementation of process functions in OS.
 
 >> Is there some particular fact or hint we should give students in
 >> future quarters to help them solve the problems?  Conversely, did you
