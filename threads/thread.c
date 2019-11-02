@@ -198,7 +198,6 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -471,10 +470,15 @@ init_thread (struct thread *t, const char *name, int priority)
   /* Owned by wait */
   list_init (&t->child_list);
   t->exit_code = 0;
-  t->exe_file = NULL;
+  /* Owned by wait */
+
+  t->exe_file = NULL;               /* Owned by deny_write */
+
+  /* Owned by child status */
   t->child_load = 0;
   sema_init (&t->load_sema,0);
-  /* Owned by wait */
+  /* Owned by child status */
+
   #endif
 
   old_level = intr_disable ();
@@ -596,6 +600,7 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+/* Helper function for getting correspond thread by tid */
 struct thread *
 get_thread_by_tid (tid_t tid)
 {

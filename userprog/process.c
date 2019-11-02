@@ -21,10 +21,13 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+/* Helper functions, see definition below */
 void try_sema_up (struct thread * parent, tid_t child_tid);
 int try_sema_down (struct thread * parent, tid_t child_tid);
 void free_child_list (struct thread * f);
 void free_all_open_file (struct thread *f);
+/* Helper functions, see definition below */
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -42,37 +45,42 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-  
-  file = palloc_get_page(0);
+
+  /* Extract the first arg which is the name of this thread */
+  file = palloc_get_page(0); /* Must malloc memory here, not sure if using
+                                function malloc() is OK */ 
+
   if (file == NULL)
     {
-      palloc_free_page (fn_copy);
+      palloc_free_page (fn_copy);   /* If fail, free memory */
       return TID_ERROR;
     }
-
-    
   strlcpy (file, file_name, PGSIZE);
-  exe_name = strtok_r(file, " ", &save_ptr);
+  exe_name = strtok_r(file, " ", &save_ptr); /* Get the first arg */
+  /* Extract the first arg which is the name of this thread */
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exe_name, PRI_DEFAULT, start_process, fn_copy);
 
-  palloc_free_page (file);
+  palloc_free_page (file); /* After createing, free memory */
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   else
     {
+      /* Owned by wait: Initialize child_info struct */
       struct thread* t = get_thread_by_tid(tid);
       t->parent_tid = thread_current ()->tid;
       struct child_info *child = malloc (sizeof (struct child_info));
       if (child != NULL)
         { 
-          sema_init (&child->wait_sema, 0);
+          sema_init (&child->wait_sema, 0);  /* Note that initial sema is 0 */
           child->tid = tid;
           child->exit_code = 0;
           child->waited = false;
           list_push_back (&thread_current()->child_list, &child->child_ele);
-          
         }
+      /* Owned by wait: Initialize child_info struct */
     }
   return tid;
 }
@@ -95,23 +103,27 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  exe_name = strtok_r(file_name, " ", &save_ptr);
 
+  /* Extract the the exec name */
+  exe_name = strtok_r(file_name, " ", &save_ptr);
   success = load (exe_name, &if_.eip, &if_.esp);
 
+  /* Owned by child status */
   struct thread * parent = get_thread_by_tid (cur->parent_tid);
-
   if (success) 
     parent->child_load = 1;
   else 
     parent->child_load = -1;
   sema_up(&parent->load_sema);
+  /* Owned by child status */
+
   if (success)
     {
       /* Push the exe_name */
       if_.esp -= strlen(exe_name) + 1;
       memcpy (if_.esp, exe_name, strlen(exe_name) + 1);
       argv[0] = if_.esp;
+
       /* Push all the argv */
       while ((token = strtok_r(NULL, " ", &save_ptr)) != NULL)
         {
@@ -119,34 +131,42 @@ start_process (void *file_name_)
           memcpy (if_.esp, token, strlen(token) + 1);
           argv[argc++] = if_.esp;
         }
+
       /* Word Alignment */
       while ((int)if_.esp % 4)
         if_.esp--;
+
       /* Push null pointer sentinel */
       if_.esp -= sizeof(char*);
       memset(if_.esp, 0, sizeof(char*));
+
       /* Push address of argv */
       for (int i = argc-1; i >= 0; i--)
         {
           if_.esp -= sizeof(char*);
           memcpy (if_.esp, &argv[i], sizeof(char*));
         }
+        
       /* Push address of argv[0] */
       if_.esp -= sizeof(char**);
       *((char **) if_.esp) = if_.esp + sizeof(char **);
+
       /* Push argc */
       if_.esp -= sizeof(int);
       *((int *) if_.esp) = argc;
+
       /* Push fake return address */
       if_.esp -= sizeof(int *);
       *((int *) if_.esp) = 0;
 
       //hex_dump((uintptr_t)if_.esp, if_.esp, 128, true);
     }
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success){
-    cur -> exit_code = -1;
+    cur -> exit_code = -1;     /* If loading is not success, 
+                                  exit status should be -1 */
     thread_exit ();
   }
     
@@ -178,6 +198,7 @@ process_wait (tid_t child_tid)
   struct thread *current = thread_current ();
   if (child_tid == TID_ERROR)
     return -1;
+  /* Use sema_down to wait child thread, see definition below*/ 
   return try_sema_down (current, child_tid);
 }
 
@@ -192,17 +213,25 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
+
+  /* Print exit message */
   printf ("%s: exit(%d)\n", cur->name, cur->exit_code);
   
+  /* If parent is waiting for me, wake up my parent, see definition below */
   struct thread *parent = get_thread_by_tid (cur->parent_tid);
   if (parent != NULL)
     try_sema_up(parent,cur->tid);
 
+  /* Free my child list */
   free_child_list (cur);
 
+  /* Close my open file and free the resources */
   free_all_open_file (cur);
+
+  /* Allow my exe file to be writen */
   if (cur->exe_file != NULL)
     file_allow_write (cur->exe_file);
+
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -413,6 +442,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   success = true;
 
  done:
+  /* If load successful, deny my exe file to be written */
   if (success)
     {
       t->exe_file = file;
@@ -420,6 +450,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
   else
     file_close (file);
+    
   /* We arrive here whether the load is successful or not. */
   //file_close (file);
   return success;
@@ -582,16 +613,18 @@ try_sema_down (struct thread *parent, tid_t child_tid)
   else 
     {
      struct list_elem* iter;
+     struct child_info* child;
      for (iter = list_begin (&parent->child_list);
           iter != list_end (&parent->child_list);
           iter = list_next (iter)) 
           { 
-            struct child_info *child = list_entry (iter, struct child_info, child_ele);
+            child = list_entry (iter, struct child_info, child_ele);
             if (child->tid == child_tid && !child->waited )
               {       
-
+                /* If find the child, wait on the child until it finishes*/
                 sema_down (&child->wait_sema);
                 child->waited = true;
+                /* After waiting, return child's exit status */
                 return child->exit_code;
               } 
           }
@@ -608,13 +641,15 @@ try_sema_up (struct thread * parent, tid_t child_tid)
   else 
     {
      struct list_elem* iter;
+     struct child_info* child;
      for (iter = list_begin (&parent->child_list);
           iter != list_end (&parent->child_list);
           iter = list_next (iter)) 
         {
-          struct child_info *child = list_entry (iter, struct child_info, child_ele);
+          child = list_entry (iter, struct child_info, child_ele);
           if (child->tid == child_tid)
             {
+              /* If find the child, wake up parent by sema_up */
               sema_up (&child->wait_sema);
               return;
             }  
@@ -622,6 +657,7 @@ try_sema_up (struct thread * parent, tid_t child_tid)
     } 
 }
 
+/* Iterate to release all the resources in child_list */
 void 
 free_child_list (struct thread * f)
 {
@@ -642,6 +678,7 @@ free_child_list (struct thread * f)
 
 }
 
+/* Iterate to close all the open file and release file descriptors */
 void 
 free_all_open_file (struct thread *f)
 {
