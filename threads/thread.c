@@ -464,20 +464,18 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   #ifdef USERPROG
-  t->file_num = 2;
+
+  t->file_num = 2;               /* Initialize to 2 since 0 and 1 are occupied
+                                    by STDIN_FILENO/STDOUT_FILENO */     
   list_init (&t->fd_list);
 
-  /* Owned by wait */
   list_init (&t->child_list);
   t->exit_code = 0;
-  /* Owned by wait */
 
-  t->exe_file = NULL;               /* Owned by deny_write */
+  t->exe_file = NULL;            
 
-  /* Owned by child status */
-  t->child_load = 0;
-  sema_init (&t->load_sema,0);
-  /* Owned by child status */
+  t->child_load = 0;             
+  sema_init (&t->load_sema, 0);
 
   #endif
 

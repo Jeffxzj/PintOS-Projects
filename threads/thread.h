@@ -110,37 +110,37 @@ struct thread
     /* Owned by wait */
 
     struct file *exe_file;              /* Record my own exec file, used in 
-                                            deny_write and allow write */
+                                            deny_write and allow_write */
 
     /* Owned by child status */
     int child_load;                     /* Determine if the child thread load
                                            successfully  */
     struct semaphore load_sema;         /* Sychronization method */
     /* Owned by child status*/
-
-#endif
-
     struct list fd_list;                /* List of file descriptors */
     int file_num;                       /* Number of files opened */
+#endif
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
   
 /* Owned by wait */
-struct child_info{
-  tid_t tid;                            /* Child tid */
-  int exit_code;                        /* Child exit status */
-  bool waited;                          /* If the child has been waited */
-  struct semaphore wait_sema;           /* Parent should wait this sema */
-  struct list_elem child_ele;           /* Used in child_list */
-};
+struct child_info
+  {
+    tid_t tid;                          /* Child tid */
+    int exit_code;                      /* Child exit status */
+    bool waited;                        /* If the child has been waited */
+    struct semaphore wait_sema;         /* Parent should wait this sema */
+    struct list_elem child_ele;         /* Used in child_list */
+  };
 /* Owned by wait */
 
+/* File descriptor struct used in filesys related syscalls, owend by thread */
 struct file_descriptor
   {
-    int fd;
-    struct file *file;
-    struct list_elem elem;
+    int fd;                             /* Handle number of fd */
+    struct file *file;                  
+    struct list_elem elem;  
   };
 
 /* If false (default), use round-robin scheduler.
