@@ -216,8 +216,9 @@ syscall_exec (const char *cmd_line)
   lock_acquire (&fs_lock);
   pid = process_execute (cmd_line);
   lock_release (&fs_lock);
+  /* Wait until the child thread load */
   sema_down (&thread_current()->load_sema);
-  
+  /* If load fail, return -1 */
   if (thread_current() -> child_load == -1)
     pid = -1;
 
