@@ -19,6 +19,8 @@ Runze Yuan <yuanrz@shanghaitech.edu.cn>
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
+https://github.com/Wang-GY/pintos-project2
+https://github.com/codyjack/OS-pintos
 
 			   ARGUMENT PASSING
 			   ================
@@ -28,7 +30,7 @@ Runze Yuan <yuanrz@shanghaitech.edu.cn>
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
-
+None.
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
@@ -124,6 +126,8 @@ the quarter.
 
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?
+The syscall part, especially dealing with wait() and exec() has gave us greater
+insight into the real implementation of process functions in OS.
 
 >> Is there some particular fact or hint we should give students in
 >> future quarters to help them solve the problems?  Conversely, did you
