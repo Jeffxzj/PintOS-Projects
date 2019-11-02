@@ -18,7 +18,6 @@ static void syscall_handler (struct intr_frame *);
 
 /* Syscall functions */
 static void syscall_halt (void);
-//static void syscall_exit (int status);
 static pid_t syscall_exec (const char *cmd_line);
 static int syscall_wait (pid_t pid);
 static bool syscall_create (const char *file, unsigned initial_size);
@@ -39,6 +38,7 @@ static struct file_descriptor *find_opened_file (struct thread *t, int fd);
 /* Lock to protect file system operations. */
 static struct lock fs_lock;      
 
+/* Constants to check bound of syscall code */
 static const int SYSCODE_MIN = 0;
 static const int SYSCODE_MAX = 19;
 
@@ -53,13 +53,12 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
 
-  uint32_t *esp = f->esp;            /* convert f->esp to integer pointer */
+  uint32_t *esp = f->esp;   /* convert f->esp to integer pointer */
 
-  
   int sys_code = *esp;
   if (sys_code < SYSCODE_MIN || sys_code > SYSCODE_MAX || esp == NULL
-      || !check_valid_pointer (f->esp + 4, 4))
-    syscall_exit (-1);
+      || !check_valid_pointer (f->esp, 4))
+      syscall_exit (-1);
 
   switch (sys_code)
     {
@@ -180,17 +179,17 @@ syscall_exit (int status)
   struct thread *cur = thread_current();
   struct thread *parent = get_thread_by_tid (cur->parent_tid);
   cur->exit_code = status;
-  if (parent == NULL)
-    thread_exit ();
-  if (list_empty (&parent->child_list) )
+  
+  if (parent == NULL || list_empty (&parent->child_list))
     thread_exit ();
   
-  struct list_elem* iter;
+  struct list_elem* iter = NULL;
+  struct child_info* child = NULL;
   for (iter = list_begin (&parent->child_list);
        iter != list_end (&parent->child_list);
        iter = list_next (iter)) 
     {
-      struct child_info *child = list_entry(iter,struct child_info,child_ele);
+      child = list_entry (iter,struct child_info,child_ele);
       if (child->tid == cur->tid)
         {
           child->exit_code = status;
@@ -210,17 +209,18 @@ static pid_t
 syscall_exec (const char *cmd_line)
 {
   pid_t pid;
+  
   if (cmd_line == NULL)
     return -1;
+  
   lock_acquire (&fs_lock);
-
   pid = process_execute (cmd_line);
+  lock_release (&fs_lock);
   sema_down (&thread_current()->load_sema);
-
+  
   if (thread_current() -> child_load == -1)
     pid = -1;
 
-  lock_release (&fs_lock);
   return pid;
 }
 
@@ -302,10 +302,9 @@ syscall_filesize (int fd)
 static int 
 syscall_read (int fd, void *buffer, unsigned size)
 {
-  /* TODO:
-    maybe check if (buffer+size) is valid later */
   int size_read = 0;
   struct file_descriptor *fd_struct = NULL;
+  
   if (fd == 0)
     {
       uint8_t *buf = buffer;
@@ -313,12 +312,15 @@ syscall_read (int fd, void *buffer, unsigned size)
         buf[i] = input_getc ();
       return size;
     }
+  
   fd_struct = find_opened_file (thread_current(), fd);
   if (fd_struct == NULL || fd_struct->file == NULL)
     return -1;
+  
   lock_acquire (&fs_lock);
   size_read = file_read (fd_struct->file, buffer, size);
   lock_release (&fs_lock);
+  
   return size_read;
 }
 
@@ -344,6 +346,7 @@ syscall_write (int fd, const void *buffer, unsigned size)
   lock_acquire (&fs_lock);
   size_write = file_write (fd_struct->file, buffer, size);
   lock_release (&fs_lock);
+  
   return size_write;
 }
 
@@ -397,26 +400,28 @@ check_valid_pointer (void *ptr, uint8_t argc)
 {
   struct thread *cur = thread_current ();
   uint32_t *iter = ptr;
-  for (uint8_t i = 0; i < argc; i++)
+  for (uint8_t i = 0; i < argc; i++, iter++)
     {
       /* Check if ptr is null and is a user virtual address */
       if (!is_user_vaddr (iter))
         return false;
       /* Check if ptr is allocated within the current thread's pages */      
       if (pagedir_get_page (cur->pagedir, iter) == NULL)
-        return false;
+        return false;        
     }
   return true;
 }
 
+/* Check validation of a string, ensure every char of string is in user addr */
 static bool
 check_valid_string (char *str)
 {
   if (str == NULL)
     return false;
+  
   for (char *s = str; ; s++)
     {
-      if (!check_valid_pointer (s,1))
+      if (!check_valid_pointer (s, 1))
         return false;
       if (*s == '\0')
         return true;
