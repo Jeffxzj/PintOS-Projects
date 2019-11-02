@@ -101,14 +101,22 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    int exit_code;
+
+    int exit_code;                      /* Record the status of exiting */
+
+    /* Owned by wait */              
+    tid_t parent_tid;                   /* Record the parent tid */
+    struct list child_list;             /* Child threads */ 
     /* Owned by wait */
-    struct file *exe_file;
-    tid_t parent_tid;
-    struct list child_list;             /* Child thread */ 
-    struct semaphore load_sema;
-    /* Owned by wait */
-    int child_load;
+
+    struct file *exe_file;              /* Record my own exec file, used in 
+                                            deny_write and allow write */
+
+    /* Owned by child status */
+    int child_load;                     /* Determine if the child thread load
+                                           successfully  */
+    struct semaphore load_sema;         /* Sychronization method */
+    /* Owned by child status*/
 
 #endif
 
@@ -120,11 +128,11 @@ struct thread
   
 /* Owned by wait */
 struct child_info{
-  tid_t tid;
-  int exit_code;
-  bool waited;
-  struct semaphore wait_sema;
-  struct list_elem child_ele;
+  tid_t tid;                            /* Child tid */
+  int exit_code;                        /* Child exit status */
+  bool waited;                          /* If the child has been waited */
+  struct semaphore wait_sema;           /* Parent should wait this sema */
+  struct list_elem child_ele;           /* Used in child_list */
 };
 /* Owned by wait */
 
@@ -171,5 +179,6 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/* Helper function for getting correspond thread by tid */
 struct thread *get_thread_by_tid (tid_t tid);
 #endif /* threads/thread.h */
