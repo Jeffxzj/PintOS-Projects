@@ -306,6 +306,9 @@ syscall_read (int fd, void *buffer, unsigned size)
   int size_read = 0;
   struct file_descriptor *fd_struct = NULL;
   
+  if (fd == 1)
+    return -1;
+  
   if (fd == 0)
     {
       uint8_t *buf = buffer;
@@ -333,6 +336,9 @@ syscall_write (int fd, const void *buffer, unsigned size)
 {  
   int size_write = 0 ;
   struct file_descriptor *fd_struct = NULL;
+  
+  if (fd == 0)
+    return -1;
   
   if (fd == 1)
     { 
