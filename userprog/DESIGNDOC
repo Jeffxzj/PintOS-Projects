@@ -31,21 +31,76 @@ https://github.com/codyjack/OS-pintos
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
 None.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
+The process of argument parsing can be divided into two parts:
+	1. Seperate the first argument with the rest, because the first one
+		is the name of the executable file and the rest is arguments.
+	2. Setup argument stack.
+
+First we copy a new string of the given name, the extract the exe_name 
+and pass exe_name and a copy of given name to thread_create.
+
+Then we do the second step (stack-setup) in start_process(), after the
+executable file is loaded successfully. 
+	1. We use strtok_r() to seperate arguments in filename string and 
+		use memcpy() to push them on the stack. The order does not matter.
+		But recording address of every argument and the number of arguments
+		are essential.
+	2. Do word alignment, make sure the stack pointer used next is the
+		multiple of 4.
+	3. Push a null pointer sentinel.
+	4. Push addresses that are recorded in step 1
+	5. Push the address of argv[0]
+	6. Push the number of arguments.
+	7. Push a fake return address which is 0.
+
+Note that the order of arguments is right-to-left, which means the name of
+executable file must be at the lowest address.
+
+Way to arrange the elements of argv[] in right order:
+	We push the arguments on the stack first, and record addresses. Then scan
+	the list backwards and push these addresses on the stack from above to
+	bottom.
+
+Way of avoiding overflowing:
+	Actually, we don't know how much arguments that user passes to us. So we
+	can not pre-allocate enough space for arguments. So we decided to let the
+	keep set argument stack until it fails. Then, when the stack pointer 
+	reach a space that is invalid, it causes page fault, and we call exit(-1)
+	at that moment.
+
+
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+strtok() store the rest string into a static buffer. strtok_r() store the
+rest string into the given pointer save_ptr. It is not safe for pintos to 
+store a this into a static buffer. And saving it into save_ptr allows us 
+to iterate to read argument later.
 
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
 
+Advantages:
+	1. Make kernel do less operations and save some time for doing arguments
+		parsing in kernel.
+	2. Make it safer for kernel. If argument parsing is done in shell, it 
+		is done in user mode. Since kernel has more access rights, doing it in 
+		kernel more may has more risks.
+	3. Checking if the arguments and executable file are there first can 
+		better avoid kernel failing.
+
+		
 			     SYSTEM CALLS
 			     ============
 
@@ -153,6 +208,27 @@ greatest number of inspection is 2, the least number is 1.
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
 
+When parent thread creates a child thread, a "child_info" instance containing
+information about the child thread is created and put into the child_list
+parent thread.
+This "child_info" instance contains a semaphore initialize with 0.
+
+When a thread is calling wait on a child thread, we scan the child_list in
+parent thread. If we can not find the correspond child thread, return -1.
+If it is found, then we check if it has been waited, return -1 if it has been 
+waited. 
+Only when it is found and has not been waited, the parent thread will call 
+sema_down() on that semaphore, because the initial value of the semaphore 
+is 0, the parent thread will be blocked.
+
+When the child thread is put into running and call process_exit(), we can 
+find parent thread by its parent tid. If its parent is found, we scan the 
+child list and find the child_info of child thread. Record the exit status. 
+Call sema_up() on the semaphore, and wake up the parent thread.
+
+Then the parent thread will wake and can get the exit status of child thread 
+by child_info. 
+
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
 >> process to be terminated.  System calls are fraught with such
@@ -210,12 +286,64 @@ syscall_exit(-1), all the temporarily allocated resources are freed.
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
 
+A int variable called "child_load" is added into struct thread and will be
+initialized to 0 when thread is initialized.
+
+A semaphore called "load_sema" is added into struct thread and will be 
+initialized to value 0 when thread is initialized.
+
+When a perent thread call exec(), after called process_exec(), the child 
+thread is created but not loaded. Then the parent thread call sema_down()
+on "load_sema", because "load_sema" is initialized to 0. The parent thread 
+will be blocked.
+
+After the child thread loading, we can know if the child thread load 
+successfully. If it is load successfully, we change the "child_load" to
+1, otherwise to -1. Then get its parent thread using parent tid. Call 
+sema_up() on the "load_sema" of the parent thread to wake up the parent 
+thread.
+
+When the parent thread continues running, it can know whether the child thread
+is loaded successfully through "load_sema".
+
+Note that if the child thread is loaded unsuccessfully, the exit status should
+be set to -1.
+
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
 >> calls wait(C) before C exits?  After C exits?  How do you ensure
 >> that all resources are freed in each case?  How about when P
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
+
+If P calls wait(C) before C exits, it will be blocked due to sema_down().
+Only when C exits and do sema_up(), P can wake up. This situation do
+sema_down() first and sema_up() then.
+
+If P calls wait(C) after C exits, because when C exits, it will call 
+sema_up(), the value of semaphore is set to 1. When P calls wait(C) and 
+do sema_down(), the value is 1. Then the parent thread won't be blocked 
+and continue running.
+
+When the parent thread creates child thread, we will create a "child_info"
+and put it into the child list of the parent thread. So only parent thread
+can access the resources. And this "child_info" instance is independent of 
+child thread.
+
+So if a parent thread is exiting, it should free all the "child_info"
+resources in child list. Since the "child_info" instance is independent of
+child thread, freeing the resources does not influence the child thread.
+
+If P terminates without waiting before C exits. P will free the "child_info"
+of C. Then because P exits, C would never be waited, which is satisfiable.
+
+If P terminates without waiting after C exits, it can free all the 
+"child_info" through child list can won't touch child thread. 
+
+The special case is that the child thread fails loading, it creates the
+"child_info" but the child thread will call exit() immediately. In this case,
+it may waste some memory, but won't cause memory leak, since "child_info" is 
+under the parent thread's control and will be freed eventually.
 
 ---- RATIONALE ----
 
@@ -258,8 +386,8 @@ the quarter.
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?
 
-The syscall part, especially dealing with wait() and exec() has gave us greater
-insights into the real implementation of process functions in OS.
+The syscall part, especially dealing with wait() and exec() has gave us 
+greater insights into the real implementation of process functions in OS.
 
 >> Is there some particular fact or hint we should give students in
 >> future quarters to help them solve the problems?  Conversely, did you
