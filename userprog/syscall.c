@@ -16,7 +16,7 @@
 
 static void syscall_handler (struct intr_frame *);
 
-/* Syscall functions */
+/* Syscall functions for Project 2 */
 static void syscall_halt (void);
 static pid_t syscall_exec (const char *cmd_line);
 static int syscall_wait (pid_t pid);
@@ -29,6 +29,9 @@ static int syscall_write (int fd, const void *buffer, unsigned size);
 static void syscall_seek (int fd, unsigned position);
 static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
+
+/* Syscall functions for Project 3 */
+
 
 /* Helper functions */
 static bool check_valid_pointer (void *ptr, uint8_t argc);
