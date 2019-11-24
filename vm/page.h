@@ -1,5 +1,5 @@
+#include <hash.h>
 #include "filesys/file.h"
-#include "lib/kernel/hash.h"
 
 
 struct page_suppl_entry {

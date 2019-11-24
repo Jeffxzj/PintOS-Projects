@@ -152,11 +152,18 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   /* If fault_addr is null or addr access rights violation. */
-  if (fault_addr == NULL || !not_present)
+  if (fault_addr == NULL || !not_present || is_kernel_vaddr (fault_addr))
     syscall_exit (-1);
-  if (is_kernel_vaddr (fault_addr) && user)
-    syscall_exit (-1);
+  
+  struct page_suppl_entry *spte = NULL;
+  if (spte != NULL)
+    {
 
+    }
+  else
+    {
+    /* code */
+    }
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
