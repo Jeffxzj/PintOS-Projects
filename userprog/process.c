@@ -21,6 +21,7 @@
 
 /* Proj 3 */
 #include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -120,6 +121,9 @@ start_process (void *file_name_)
     parent->child_load = -1;
   sema_up(&parent->load_sema);
   /* Owned by child status */
+
+  /* Init suppl table */
+  hash_init (&cur->suppl_table, page_hash_func, page_hash_less_func, NULL);
 
   if (success)
     {

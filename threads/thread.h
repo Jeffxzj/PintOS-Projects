@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "synch.h"
 #include <stdbool.h>
+#include "../vm/page.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -119,7 +120,11 @@ struct thread
     /* Owned by child status*/
     struct list fd_list;                /* List of file descriptors */
     int file_num;                       /* Number of files opened */
-#endif
+
+#endif    
+    /* For supplementaty table */
+    struct hash suppl_table;
+    
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
