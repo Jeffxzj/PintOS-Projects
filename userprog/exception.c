@@ -6,6 +6,7 @@
 #include "threads/thread.h"
 #include "userprog/syscall.h"
 #include "threads/vaddr.h"
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -149,10 +150,13 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-  //syscall_exit (-1);
-  /* For user caused exception */
-  if (not_present || (is_kernel_vaddr (fault_addr) && user))
+
+  /* If fault_addr is null or addr access rights violation. */
+  if (fault_addr == NULL || !not_present)
     syscall_exit (-1);
+  if (is_kernel_vaddr (fault_addr) && user)
+    syscall_exit (-1);
+
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
