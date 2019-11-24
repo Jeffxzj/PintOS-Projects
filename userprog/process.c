@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <hash.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -108,6 +109,8 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  hash_init (&cur->suppl_page_table, page_hash_func, page_hash_less_func, NULL)
 
   /* Extract the the exec name */
   exe_name = strtok_r(file_name, " ", &save_ptr);
@@ -234,6 +237,9 @@ process_exit (void)
 
   /* Close my open file and free the resources */
   free_all_open_file (cur);
+
+  /* Free the supplementary page table. */
+  /* free_spt() */
 
   /* Allow my exe file to be writen */
   if (cur->exe_file != NULL)

@@ -1,5 +1,5 @@
+#include <hash.h>
 #include "filesys/file.h"
-#include "lib/kernel/hash.h"
 
 #define FILE 1
 #define SWAP 2
