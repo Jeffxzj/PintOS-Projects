@@ -110,7 +110,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-  hash_init (&cur->suppl_page_table, page_hash_func, page_hash_less_func, NULL)
+  hash_init (&cur->suppl_page_table, page_hash_func, page_hash_less_func, NULL);
 
   /* Extract the the exec name */
   exe_name = strtok_r(file_name, " ", &save_ptr);
@@ -124,9 +124,6 @@ start_process (void *file_name_)
     parent->child_load = -1;
   sema_up(&parent->load_sema);
   /* Owned by child status */
-
-  /* Init suppl table */
-  hash_init (&cur->suppl_table, page_hash_func, page_hash_less_func, NULL);
 
   if (success)
     {
@@ -344,6 +341,9 @@ static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
+// static bool lazy_load (struct file *file, off_t ofs, uint8_t *upage, 
+//                        uint32_t read_bytes, uint32_t zero_bytes, 
+//                        bool writable);
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
@@ -435,9 +435,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
+
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
+              /*
+              if (!lazy_load (file, file_page, (void *) mem_page,
+                              read_bytes, zero_bytes, writable))
+                goto done;
+              */
             }
           else
             goto done;
@@ -580,6 +586,35 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     }
   return true;
 }
+
+/*
+static bool
+lazy_load (struct file *file, off_t ofs, uint8_t *upage, 
+           uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
+{
+  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+  ASSERT (pg_ofs (upage) == 0);
+  ASSERT (ofs % PGSIZE == 0);
+
+  struct page_suppl_entry *spte;
+  
+  while (read_bytes > 0 || zero_bytes > 0) 
+    {
+      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      spte = page_create_spte (file, ofs, upage, FILE, page_read_bytes, 
+                               page_zero_bytes, writable);
+      
+      if (!page_hash_insert (thread_current ()->suppl_page_table, spte))
+        return false;
+      read_bytes -= page_read_bytes;
+      zero_bytes -= page_zero_bytes;
+      upage += PGSIZE;
+      ofs += page_read_bytes;
+    }
+}
+*/
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */

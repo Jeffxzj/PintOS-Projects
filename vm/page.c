@@ -1,4 +1,7 @@
+#include <debug.h>
 #include "page.h"
+#include "threads/malloc.h"
+#include "threads/vaddr.h"
 
 
 unsigned
@@ -12,8 +15,8 @@ page_hash_func (const struct hash_elem *p, void *aux UNUSED)
 
 bool
 page_hash_less_func (const struct hash_elem *a,
-                const struct hash_elem *b,
-                void *aux)
+                     const struct hash_elem *b,
+                     void *aux UNUSED)
 {
     const struct page_suppl_entry * e1;
     const struct page_suppl_entry * e2;
@@ -26,7 +29,7 @@ page_hash_less_func (const struct hash_elem *a,
 
 struct page_suppl_entry *
 page_create_spte ( struct file *file, off_t offset, uint8_t *upage, int type,
-                    uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+                   uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
     struct page_suppl_entry *e;
     e = malloc(sizeof(struct page_suppl_entry));
@@ -81,6 +84,7 @@ page_hash_find (struct hash *table, uint8_t *upage)
     return matched_page;
 }
 
+/*
 bool page_load (struct page_suppl_entry *e)
 {
     switch (e->type) 
@@ -93,3 +97,4 @@ bool page_load (struct page_suppl_entry *e)
             page_load_file (e);
     }
 }
+*/

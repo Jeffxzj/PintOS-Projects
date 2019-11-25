@@ -1,3 +1,6 @@
+#ifndef VM_PAGE_H
+#define VM_PAGE_H
+
 #include <hash.h>
 #include "filesys/file.h"
 
@@ -24,12 +27,13 @@ page_create_spte (struct file *file,  off_t offset, uint8_t *upage, int type,
 
 /* Returns a hash value for page p. */
 unsigned
-page_hash_func (const struct hash_elem *p_, void *aux UNUSED);
+page_hash_func (const struct hash_elem *p_, void *aux);
 
 /* Returns true if page a precedes page b. */
 bool
-page_hash_less_func (const struct hash_elem *a_, const struct hash_elem *b_,
-           void *aux UNUSED);
+page_hash_less_func (const struct hash_elem *a_, 
+                     const struct hash_elem *b_,
+                     void *aux);
 
 bool
 page_hash_insert (struct hash *table, struct page_suppl_entry *e);
@@ -42,3 +46,5 @@ bool page_load_swap (struct page_suppl_entry *e);
 bool page_load_mmp (struct page_suppl_entry *e);
 
 bool page_load (struct page_suppl_entry *e);
+
+#endif
