@@ -1,9 +1,12 @@
 #include "page.h"
+#include "frame.h"
+
 #include <debug.h>
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
 #include <string.h>
-#include "../userprog/process.h"
+#include "userprog/process.h"
 
 unsigned
 page_hash_func (const struct hash_elem *p, void *aux UNUSED)
@@ -107,14 +110,13 @@ page_load_file (struct page_suppl_entry *e)
   }
   /* Map the frame to the page table */
   if (!install_page (e->upage, frame, e->writable))
-  {
+    {
       palloc_free_frame (frame);
       return false;
-  }
+    }
 
   e->loaded = true;
   return true;
-    
 }
 
 bool page_load (struct page_suppl_entry *e)
