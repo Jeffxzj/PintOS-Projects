@@ -118,31 +118,31 @@ page_load_file (struct page_suppl_entry *e)
   return true;
 }
 
-bool page_load (struct page_suppl_entry *e)
+bool 
+page_load (struct page_suppl_entry *e)
 {
   bool success = false;
   switch (e->type) 
     {
-      case MMAP:
+      case _MMAP:
         break;
         //success = page_load_mmp (e);
-      case SWAP:
+      case _SWAP:
         break;
         //success = page_load_swap (e);
-      case FILE:
+      case _FILE:
         success = page_load_file (e);
     }
   return success;
 }
 
+/* Actually lazy load do not load anything to physical address, it just insert
+   the needed supplementary page table entry to SPT of the current thread. */
 bool
-page_lazy_load (struct file *file, off_t ofs, uint8_t *upage, 
-                uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
+page_lazy_load (struct file *file, off_t ofs, uint8_t *upage,
+                enum spte_type type, uint32_t read_bytes, 
+                uint32_t zero_bytes, bool writable) 
 {
-  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-  ASSERT (pg_ofs (upage) == 0);
-  ASSERT (ofs % PGSIZE == 0);
-
   struct page_suppl_entry *spte;
   
   while (read_bytes > 0 || zero_bytes > 0) 
@@ -150,11 +150,15 @@ page_lazy_load (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      spte = page_create_spte (file, ofs, upage, FILE, page_read_bytes, 
+      spte = page_create_spte (file, ofs, upage, type, page_read_bytes, 
                                page_zero_bytes, writable);
-      
-      if (!page_hash_insert (&thread_current ()->suppl_page_table, spte))
+      if (spte == NULL)
         return false;
+      if (!page_hash_insert (&thread_current ()->suppl_page_table, spte))
+        {
+          free (spte);
+          return false;
+        }
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
@@ -163,7 +167,8 @@ page_lazy_load (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
-bool stack_grow (void *fault_addr)
+bool 
+stack_grow (void *fault_addr)
 {
   if (fault_addr == NULL) 
     return false;

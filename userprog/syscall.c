@@ -16,7 +16,7 @@
 
 static void syscall_handler (struct intr_frame *);
 
-/* Syscall functions for Project 2 */
+/* Syscall functions for Project 2. */
 static void syscall_halt (void);
 static pid_t syscall_exec (const char *cmd_line);
 static int syscall_wait (pid_t pid);
@@ -30,8 +30,9 @@ static void syscall_seek (int fd, unsigned position);
 static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
 
-/* Syscall functions for Project 3 */
-
+/* Syscall functions for Project 3. */
+static mapid_t syscall_mmap (int fd, void *addr);
+static void syscall_munmap (mapid_t mapping);
 
 /* Helper functions */
 static bool check_valid_pointer (void *ptr, uint8_t argc);
@@ -160,6 +161,19 @@ syscall_handler (struct intr_frame *f)
         syscall_close (fd);
         break;
       }
+    case SYS_MMAP:
+      {
+        int fd = *(esp + 1);
+        void *addr = (void *)*(esp + 2);
+        f->eax = (uint32_t) syscall_mmap (fd, addr);
+        break;
+      }
+    case SYS_MUNMAP:
+      {
+        mapid_t mapping = *(esp + 1);
+        syscall_munmap (mapping);
+        break;
+      }
     default:
       break;
     }
@@ -168,7 +182,7 @@ syscall_handler (struct intr_frame *f)
 void
 syscall_halt (void)
 {
-  shutdown_power_off();
+  shutdown_power_off ();
 }
 
 /* Terminates the current user program, returning status to the kernel. If the 
@@ -192,7 +206,7 @@ syscall_exit (int status)
        iter != list_end (&parent->child_list);
        iter = list_next (iter)) 
     {
-      child = list_entry (iter,struct child_info,child_ele);
+      child = list_entry (iter, struct child_info, child_ele);
       if (child->tid == cur->tid)
         {
           child->exit_code = status;
@@ -402,6 +416,60 @@ syscall_close (int fd)
       free (fd_struct);    
     }
   lock_release (&fs_lock);
+}
+
+static mapid_t
+syscall_mmap (int fd, void *addr)
+{
+  mapid_t result = -1;
+
+  /* Console input and output are not mappable. */
+  if (fd == 0 || fd == 1)
+    return result;
+  /* addr is null or 0 or not page-aligned. */
+  if (addr == NULL || addr == 0x0 || (uint32_t) addr % PGSIZE != 0)
+    return result;
+
+  struct file_descriptor *fd_struct = find_opened_file (thread_current(), fd);
+  if (fd_struct == NULL || fd_struct->file == NULL)
+    return result;
+  /* If opened file has length of zero bytes. */
+  off_t read_bytes = file_length (fd_struct->file);
+  if (read_bytes <= 0)
+    return result;
+
+  struct thread *cur = thread_current ();
+  for (off_t ofs = 0; ofs < len; ofs += PGSIZE)
+    {
+      /* If the range of pages mapped overlaps any existing mapped pages. */
+      if (page_hash_find (&cur->suppl_page_table, addr + ofs) ||
+          pagedir_get_page(cur->pagedir, addr + ofs))
+        return result;
+    }
+  
+  lock_acquire (&fs_lock);
+  struct file *f = file_reopen (fd_struct->file);
+  lock_release (&fs_lock);
+  if (f == NULL)
+    return result;
+  
+  struct mmap_entry *mmap_entry = malloc (sizeof (struct mmap_entry));
+  if (mmap_entry == NULL)
+    return result;
+  
+  mmap_entry->mmap_id = cur->mmf_num++;
+  if (!page_lazy_load (f, 0, addr, _MMAP, read_bytes, 0, true))
+    return result;
+  
+  list_push_back (&cur->mmap_list, &mmap_entry->elem);
+  result = mmap_entry->mmap_id;
+  return result;
+}
+
+static void 
+syscall_munmap (mapid_t mapping)
+{
+  //
 }
 
 /* Helper functions */

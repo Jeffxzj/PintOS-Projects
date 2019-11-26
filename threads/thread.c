@@ -468,6 +468,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->file_num = 2;               /* Initialize to 2 since 0 and 1 are occupied
                                     by STDIN_FILENO/STDOUT_FILENO */     
   list_init (&t->fd_list);
+  
+  t->mmf_num = 0;
+  list_init (&t->mmap_list);
 
   list_init (&t->child_list);
   t->exit_code = 0;

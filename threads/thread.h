@@ -4,9 +4,10 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "synch.h"
 #include <stdbool.h>
-#include "../vm/page.h"
+#include "synch.h"
+#include "userprog/syscall.h"
+#include "vm/page.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -115,11 +116,14 @@ struct thread
 
     /* Owned by child status */
     int child_load;                     /* Determine if the child thread load
-                                           successfully  */
-    struct semaphore load_sema;         /* Sychronization method */
+                                           successfully.  */
+    struct semaphore load_sema;         /* Sychronization method. */
     /* Owned by child status*/
-    struct list fd_list;                /* List of file descriptors */
-    int file_num;                       /* Number of files opened */
+    struct list fd_list;                /* List of file descriptors. */
+    int file_num;                       /* Number of files opened. */
+    
+    struct list mmap_list;              /* List of memory mapped files. */
+    mapid_t mmf_num;
 
 #endif  
 
@@ -147,6 +151,12 @@ struct file_descriptor
     struct list_elem elem;  
   };
 
+struct mmap_entry
+  {
+    mapid_t mmap_id;
+    struct page_suppl_entry spte;
+    struct list_elem elem;
+  }
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
