@@ -121,8 +121,9 @@ struct thread
     struct list fd_list;                /* List of file descriptors */
     int file_num;                       /* Number of files opened */
 
+#endif  
+
     struct hash suppl_page_table;       /* Supplementary page table */  
-#endif    
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

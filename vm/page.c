@@ -1,6 +1,5 @@
 #include "page.h"
 #include "frame.h"
-
 #include <debug.h>
 #include <string.h>
 #include "threads/malloc.h"
@@ -162,4 +161,42 @@ page_lazy_load (struct file *file, off_t ofs, uint8_t *upage,
       ofs += page_read_bytes;
     }
   return true;
+}
+
+bool stack_grow (void *fault_addr)
+{
+  if (fault_addr == NULL) 
+    return false;
+     
+  struct page_suppl_entry *pte;
+  struct thread *cur = thread_current ();
+  pte = malloc (sizeof (struct page_suppl_entry));
+
+  pte->loaded = true;
+  pte->writable = true;
+  pte->upage = pg_round_down (fault_addr);
+
+  void *frame = palloc_get_page (PAL_USER);
+  if (frame == NULL)
+  {
+    free (pte);
+    return false;
+  }
+
+  if (!install_page (pte->upage, frame, pte->writable))
+  {
+    free (pte);
+    palloc_free_frame (frame);
+    return false;
+  }
+
+  if (page_hash_insert (&cur->suppl_page_table, pte) == NULL)
+  {
+    free (pte);
+    palloc_free_frame (frame);
+    return false;
+  }
+
+  return true;
+  
 }
