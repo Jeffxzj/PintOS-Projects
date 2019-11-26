@@ -439,7 +439,7 @@ syscall_mmap (int fd, void *addr)
     return result;
 
   struct thread *cur = thread_current ();
-  for (off_t ofs = 0; ofs < len; ofs += PGSIZE)
+  for (off_t ofs = 0; ofs < read_bytes; ofs += PGSIZE)
     {
       /* If the range of pages mapped overlaps any existing mapped pages. */
       if (page_hash_find (&cur->suppl_page_table, addr + ofs) ||

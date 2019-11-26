@@ -9,6 +9,10 @@
 #include "userprog/syscall.h"
 #include "vm/page.h"
 
+/* Map region identifier. */
+typedef int mapid_t;
+#define MAP_FAILED ((mapid_t) -1)
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -154,9 +158,8 @@ struct file_descriptor
 struct mmap_entry
   {
     mapid_t mmap_id;
-    struct page_suppl_entry spte;
     struct list_elem elem;
-  }
+  };
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
