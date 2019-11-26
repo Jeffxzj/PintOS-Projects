@@ -6,6 +6,7 @@
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
 #include "userprog/process.h"
+#include "swap.h"
 
 unsigned
 page_hash_func (const struct hash_elem *p, void *aux UNUSED)
@@ -92,7 +93,11 @@ bool
 page_load_file (struct page_suppl_entry *e)
 {
   /* Load the bytes in file into frame */
-  void *frame = palloc_get_page (PAL_USER);
+  void *frame = palloc_get_frame (PAL_USER, e);
+
+  if (frame == NULL)
+    frame = evict_frame (e);
+    
   off_t actual_size = file_read_at (e->file, frame, e->read_bytes, e->ofs);
   /* If reach the end of file, the actual read bytes 
       is not equal to the bytes it should read */
@@ -113,13 +118,30 @@ page_load_file (struct page_suppl_entry *e)
       palloc_free_frame (frame);
       return false;
     }
-
+  
   e->loaded = true;
   return true;
 }
 
+bool
+page_load_swap (struct page_suppl_entry *e)
+{
+  void *frame = palloc_get_frame (PAL_USER, e);
+
+  swap_in (frame, e->swap_idx);
+  if (!install_page (e->upage, frame, e->writable))
+  {
+    palloc_free_frame (frame);
+    return false;
+  }
+  e->loaded = true;
+  return true;
+  
+}
+
 bool page_load (struct page_suppl_entry *e)
 {
+
   bool success = false;
   switch (e->type) 
     {
@@ -127,10 +149,11 @@ bool page_load (struct page_suppl_entry *e)
         break;
         //success = page_load_mmp (e);
       case SWAP:
+        success = page_load_swap (e);
         break;
-        //success = page_load_swap (e);
       case FILE:
         success = page_load_file (e);
+        break;
     }
   return success;
 }
@@ -176,7 +199,7 @@ bool stack_grow (void *fault_addr)
   pte->writable = true;
   pte->upage = pg_round_down (fault_addr);
 
-  void *frame = palloc_get_page (PAL_USER);
+  void *frame = palloc_get_frame (PAL_USER, pte);
   if (frame == NULL)
   {
     free (pte);
@@ -190,7 +213,7 @@ bool stack_grow (void *fault_addr)
     return false;
   }
 
-  if (page_hash_insert (&cur->suppl_page_table, pte) == NULL)
+  if (!page_hash_insert (&cur->suppl_page_table, pte))
   {
     free (pte);
     palloc_free_frame (frame);

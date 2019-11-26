@@ -156,22 +156,22 @@ page_fault (struct intr_frame *f)
   /* If fault_addr is null or addr access rights violation. */
   if (fault_addr == NULL || !not_present || is_kernel_vaddr (fault_addr))
     syscall_exit (-1);
-  
+
   struct thread *cur = thread_current ();
   spte = page_hash_find (&cur->suppl_page_table, fault_addr);
 
-  
-  if (spte != NULL && !spte->loaded)
+  if (spte != NULL )
     success = page_load (spte);
   
   if (spte == NULL && fault_addr >= PHYS_BASE - STACK_LIMIT 
       && fault_addr >= f->esp -32 )
     success = stack_grow (fault_addr);
-  
+
+
   if (!success)
     syscall_exit (-1);
       
-  
+
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

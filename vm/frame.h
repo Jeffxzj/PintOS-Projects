@@ -10,13 +10,14 @@ struct list frame_table;
 struct ft_entry
   {
     void *frame;
+    struct page_suppl_entry *pte;
     struct thread *owner;
     struct list_elem elem;
   };
 
 void frame_table_init (void);
-void *palloc_get_frame (enum palloc_flags);
+void *palloc_get_frame (enum palloc_flags,struct page_suppl_entry *pte);
 void palloc_free_frame (void *);
 
-
+void *evict_frame (struct page_suppl_entry *e);
 #endif

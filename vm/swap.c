@@ -4,6 +4,7 @@
 #include "devices/block.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include <stdio.h>
 
 
 const size_t SECTOR_NUM = PGSIZE / BLOCK_SECTOR_SIZE;  /* Sectors per page. */
@@ -33,7 +34,7 @@ size_t
 swap_out (void *frame)
 {
   lock_acquire (&swap_lock);
-  size_t empty_idx = bitmap_scan_and_flip (swap_map, 0, 1, true);
+  size_t empty_idx = bitmap_scan_and_flip (swap_map, 0, 1, false);
   lock_release (&swap_lock);
   for (size_t i = 0; i < SECTOR_NUM; i++)
     {
