@@ -53,4 +53,7 @@ bool page_load_mmp (struct page_suppl_entry *e);
 
 bool page_load (struct page_suppl_entry *e);
 
+bool page_lazy_load (struct file *file, off_t ofs, uint8_t *upage, 
+                     uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+
 #endif

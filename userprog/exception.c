@@ -153,27 +153,26 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   /* If fault_addr is null or addr access rights violation. */
-  if (fault_addr == NULL || not_present || is_kernel_vaddr (fault_addr))
+  if (fault_addr == NULL || !not_present || is_kernel_vaddr (fault_addr))
     syscall_exit (-1);
   
   struct thread *cur = thread_current ();
-  //spte = page_hash_find (&cur->suppl_page_table, fault_addr);
-  /*
+  spte = page_hash_find (&cur->suppl_page_table, fault_addr);
+  
   if (spte != NULL && !spte->loaded)
-      page_load(spte);
-  else if (fault_addr)
-    {
-      // TODO
-    }
-  */
+    page_load (spte);
+  else
+    syscall_exit (-1);
+      
+  
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+  // printf ("Page fault at %p: %s error %s page in %s context.\n",
+  //         fault_addr,
+  //         not_present ? "not present" : "rights violation",
+  //         write ? "writing" : "reading",
+  //         user ? "user" : "kernel");
+  // kill (f);
 }
 

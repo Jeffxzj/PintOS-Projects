@@ -1,5 +1,6 @@
 #include "swap.h"
 #include <debug.h>
+#include <bitmap.h>
 #include "devices/block.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"

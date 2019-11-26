@@ -2,10 +2,10 @@
 #include "frame.h"
 
 #include <debug.h>
+#include <string.h>
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
-#include <string.h>
 #include "userprog/process.h"
 
 unsigned
@@ -37,7 +37,7 @@ page_create_spte (struct file *file,  off_t offset, uint8_t *upage,
                   uint32_t zero_bytes, bool writable)
 {
   struct page_suppl_entry *e;
-  e = malloc(sizeof(struct page_suppl_entry));
+  e = malloc (sizeof (struct page_suppl_entry));
   if (e == NULL)
       return NULL;
 
@@ -57,12 +57,12 @@ bool
 page_hash_insert (struct hash *table, struct page_suppl_entry *e)
 {
   if (table != NULL && e != NULL)
-  {
+    {
       struct hash_elem* old = hash_insert (table, &e->elem);
       if (old != NULL)
           return false;
       return true;
-  }
+    }
 
   return false;
 }
@@ -71,7 +71,7 @@ struct page_suppl_entry *
 page_hash_find (struct hash *table, uint8_t *upage)
 {
   if (upage == NULL || table == NULL)
-      return false;
+    return false;
   /* Generate a pseudo entry using for search */
   upage = pg_round_down (upage);
   struct page_suppl_entry search;
@@ -80,7 +80,7 @@ page_hash_find (struct hash *table, uint8_t *upage)
   /* Search the corresponding page */
   struct hash_elem *matched_elem = hash_find (table, &search.elem);
   if (matched_elem == NULL)
-      return NULL;
+    return NULL;
 
   /* Transform elem to entry */
   struct page_suppl_entry *matched_page;
@@ -94,20 +94,20 @@ page_load_file (struct page_suppl_entry *e)
 {
   /* Load the bytes in file into frame */
   void *frame = palloc_get_page (PAL_USER);
-  off_t actual_size = file_read_at (e->file, frame, e->read_bytes,e->ofs);
+  off_t actual_size = file_read_at (e->file, frame, e->read_bytes, e->ofs);
   /* If reach the end of file, the actual read bytes 
       is not equal to the bytes it should read */
-  if (actual_size != e->read_bytes)
-  {
+  if (actual_size != (off_t) e->read_bytes)
+    {
       palloc_free_frame (frame);
       return false;
-  }
+    }
   /* Memset the left bytes to 0 */
   if (e->read_bytes > 0)
-  {
+    {
       void * zero_start = frame + e->read_bytes;
       memset (zero_start, 0, e->zero_bytes);
-  }
+    }
   /* Map the frame to the page table */
   if (!install_page (e->upage, frame, e->writable))
     {
@@ -123,13 +123,43 @@ bool page_load (struct page_suppl_entry *e)
 {
   bool success = false;
   switch (e->type) 
-  {
-      /*case MMAP:
-          success = page_load_mmp (e);
+    {
+      case MMAP:
+        break;
+        //success = page_load_mmp (e);
       case SWAP:
-          success = page_load_swap (e);*/
+        break;
+        //success = page_load_swap (e);
       case FILE:
-          success = page_load_file (e);
-  }
+        success = page_load_file (e);
+    }
   return success;
+}
+
+bool
+page_lazy_load (struct file *file, off_t ofs, uint8_t *upage, 
+                uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
+{
+  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+  ASSERT (pg_ofs (upage) == 0);
+  ASSERT (ofs % PGSIZE == 0);
+
+  struct page_suppl_entry *spte;
+  
+  while (read_bytes > 0 || zero_bytes > 0) 
+    {
+      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      spte = page_create_spte (file, ofs, upage, FILE, page_read_bytes, 
+                               page_zero_bytes, writable);
+      
+      if (!page_hash_insert (&thread_current ()->suppl_page_table, spte))
+        return false;
+      read_bytes -= page_read_bytes;
+      zero_bytes -= page_zero_bytes;
+      upage += PGSIZE;
+      ofs += page_read_bytes;
+    }
+  return true;
 }
