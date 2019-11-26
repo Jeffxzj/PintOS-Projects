@@ -5,6 +5,7 @@
 #include "filesys/file.h"
 #include "frame.h"
 
+#define STACK_LIMIT 8*(1 << 20)
 enum spte_type 
 {
   FILE,

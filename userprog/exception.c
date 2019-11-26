@@ -130,6 +130,7 @@ page_fault (struct intr_frame *f)
   bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
   struct page_suppl_entry *spte;
+  bool success = false;
 
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
@@ -158,10 +159,16 @@ page_fault (struct intr_frame *f)
   
   struct thread *cur = thread_current ();
   spte = page_hash_find (&cur->suppl_page_table, fault_addr);
+
   
   if (spte != NULL && !spte->loaded)
-    page_load (spte);
-  else
+    success = page_load (spte);
+  
+  if (spte == NULL && fault_addr >= PHYS_BASE - STACK_LIMIT 
+      && fault_addr >= f->esp -32 )
+    success = stack_grow (fault_addr);
+  
+  if (!success)
     syscall_exit (-1);
       
   
