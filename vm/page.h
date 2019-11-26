@@ -18,12 +18,17 @@ struct page_suppl_entry
 {
   struct file* file;
   enum spte_type type;
-  off_t ofs; 
+
   uint8_t *upage;
+
+  off_t ofs; 
   uint32_t read_bytes; 
   uint32_t zero_bytes; 
   bool writable;
   bool loaded;
+
+  size_t swap_idx;
+
   struct hash_elem elem;  
 };
 
@@ -54,5 +59,7 @@ bool page_load (struct page_suppl_entry *e);
 bool page_lazy_load (struct file *file, off_t ofs, uint8_t *upage, 
                      enum spte_type type, uint32_t read_bytes, 
                      uint32_t zero_bytes, bool writable);
+
+bool stack_grow (void *fault_addr);
 
 #endif

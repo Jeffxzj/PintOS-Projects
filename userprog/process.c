@@ -588,12 +588,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp) 
 {
-  uint8_t *kpage;
+  //uint8_t *kpage;
   bool success = false;
 
   //kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  kpage = palloc_get_frame (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
+  //kpage = palloc_get_frame (PAL_USER | PAL_ZERO);
+  
+  /*if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
@@ -601,7 +602,11 @@ setup_stack (void **esp)
       else
         palloc_free_frame (kpage);
         //palloc_free_page (kpage);
-    }
+    }*/
+  success = stack_grow (((uint8_t *) PHYS_BASE) - PGSIZE);
+  if (success)
+    *esp = PHYS_BASE;
+
   return success;
 }
 
