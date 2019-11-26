@@ -178,24 +178,24 @@ bool stack_grow (void *fault_addr)
 
   void *frame = palloc_get_page (PAL_USER);
   if (frame == NULL)
-  {
-    free (pte);
-    return false;
-  }
+    {
+      free (pte);
+      return false;
+    }
 
   if (!install_page (pte->upage, frame, pte->writable))
-  {
-    free (pte);
-    palloc_free_frame (frame);
-    return false;
-  }
+    {
+      free (pte);
+      palloc_free_frame (frame);
+      return false;
+    }
 
   if (page_hash_insert (&cur->suppl_page_table, pte) == NULL)
-  {
-    free (pte);
-    palloc_free_frame (frame);
-    return false;
-  }
+    {
+      free (pte);
+      palloc_free_frame (frame);
+      return false;
+    }
 
   return true;
   
