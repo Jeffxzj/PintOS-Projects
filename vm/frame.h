@@ -6,6 +6,7 @@
 #include "threads/palloc.h"
 
 struct list frame_table;
+struct lock frame_lock;
 
 struct ft_entry
   {

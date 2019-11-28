@@ -50,6 +50,8 @@ bool page_hash_insert (struct hash *table, struct page_suppl_entry *e);
 
 struct page_suppl_entry *page_hash_find (struct hash *table, uint8_t *upage);
 
+void free_suppl_page_table (struct hash *spt);
+
 bool page_load_file (struct page_suppl_entry *e);
 bool page_load_swap (struct page_suppl_entry *e);
 bool page_load_mmp (struct page_suppl_entry *e);

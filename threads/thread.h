@@ -158,6 +158,9 @@ struct file_descriptor
 struct mmap_entry
   {
     mapid_t mmap_id;
+    void *uvaddr;
+    struct file *file;
+    unsigned int page_num;
     struct list_elem elem;
   };
 /* If false (default), use round-robin scheduler.

@@ -7,9 +7,6 @@
 #include "swap.h"
 #include "frame.h"
 
-
-static struct lock frame_lock;
-
 void 
 frame_table_init (void)
 {
@@ -25,7 +22,7 @@ palloc_get_frame (enum palloc_flags flags, struct page_suppl_entry *pte)
   
   void *frame = palloc_get_page (flags);
   if (frame == NULL)
-    return NULL;
+    return evict_frame (pte);
 
   struct ft_entry *ft_entry = malloc (sizeof (struct ft_entry));
   if (ft_entry == NULL)

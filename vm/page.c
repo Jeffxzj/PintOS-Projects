@@ -8,6 +8,8 @@
 #include "userprog/process.h"
 #include "swap.h"
 
+static void spte_destroy (struct hash_elem *e, void *aux);
+
 unsigned
 page_hash_func (const struct hash_elem *p, void *aux UNUSED)
 {
@@ -89,6 +91,13 @@ page_hash_find (struct hash *table, uint8_t *upage)
   return matched_page;
 }
 
+/* Destroy the supplementary page table */
+void
+free_suppl_page_table (struct hash *spt)
+{
+  hash_destroy (spt, spte_destroy);
+}
+
 bool 
 page_load_file (struct page_suppl_entry *e)
 {
@@ -96,7 +105,8 @@ page_load_file (struct page_suppl_entry *e)
   void *frame = palloc_get_frame (PAL_USER, e);
 
   if (frame == NULL)
-    frame = evict_frame (e);
+    frame = NULL;
+    //frame = evict_frame (e);    
     
   off_t actual_size = file_read_at (e->file, frame, e->read_bytes, e->ofs);
   /* If reach the end of file, the actual read bytes 
@@ -107,9 +117,9 @@ page_load_file (struct page_suppl_entry *e)
       return false;
     }
   /* Memset the left bytes to 0 */
-  if (e->read_bytes > 0)
+  if (e->zero_bytes > 0)
     {
-      void * zero_start = frame + e->read_bytes;
+      void *zero_start = frame + e->read_bytes;
       memset (zero_start, 0, e->zero_bytes);
     }
   /* Map the frame to the page table */
@@ -144,18 +154,12 @@ page_load (struct page_suppl_entry *e)
 {
 
   bool success = false;
-  switch (e->type) 
-    {
-      case _MMAP:
-        break;
-        //success = page_load_mmp (e);
-      case _SWAP:
-        break;
-        //success = page_load_swap (e);
-      case _FILE:
-        success = page_load_file (e);
-        break;
-    }
+
+  if (e->type == _FILE || e->type == _MMAP)
+    success = page_load_file (e);
+  else if (e->type == _SWAP)
+    success = page_load_swap (e);
+
   return success;
 }
 
@@ -226,5 +230,11 @@ stack_grow (void *fault_addr)
   }
 
   return true;
-  
+}
+
+/* Destructor for hash */
+static void
+spte_destroy (struct hash_elem *e, void *aux UNUSED)
+{
+  free (hash_entry (e, struct page_suppl_entry, elem));
 }

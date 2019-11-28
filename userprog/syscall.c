@@ -35,6 +35,7 @@ static mapid_t syscall_mmap (int fd, void *addr);
 static void syscall_munmap (mapid_t mapping);
 
 /* Helper functions */
+static void free_mmap_entry (struct mmap_entry *mmp_e);
 static bool check_valid_pointer (void *ptr, uint8_t argc);
 static bool check_valid_string (char *str);
 static struct file_descriptor *find_opened_file (struct thread *t, int fd);
@@ -179,7 +180,7 @@ syscall_handler (struct intr_frame *f)
     }
 }
 
-void
+static void
 syscall_halt (void)
 {
   shutdown_power_off ();
@@ -197,6 +198,9 @@ syscall_exit (int status)
   struct thread *parent = get_thread_by_tid (cur->parent_tid);
   cur->exit_code = status;
   
+  for (mapid_t i = 0; i < cur->mmf_num; i++)
+    syscall_munmap (i);
+  
   if (parent == NULL || list_empty (&parent->child_list))
     thread_exit ();
   
@@ -212,7 +216,7 @@ syscall_exit (int status)
           child->exit_code = status;
           break;
         }  
-    } 
+    }
   thread_exit ();
 }
 
@@ -439,11 +443,12 @@ syscall_mmap (int fd, void *addr)
     return result;
 
   struct thread *cur = thread_current ();
-  for (off_t ofs = 0; ofs < read_bytes; ofs += PGSIZE)
+  uint32_t ofs = 0;
+  for (ofs = 0; ofs < read_bytes; ofs += PGSIZE)
     {
       /* If the range of pages mapped overlaps any existing mapped pages. */
       if (page_hash_find (&cur->suppl_page_table, addr + ofs) ||
-          pagedir_get_page(cur->pagedir, addr + ofs))
+          pagedir_get_page (cur->pagedir, addr + ofs))
         return result;
     }
   
@@ -457,8 +462,12 @@ syscall_mmap (int fd, void *addr)
   if (mmap_entry == NULL)
     return result;
   
+  uint32_t zero_bytes = ofs - read_bytes;
   mmap_entry->mmap_id = cur->mmf_num++;
-  if (!page_lazy_load (f, 0, addr, _MMAP, read_bytes, 0, true))
+  mmap_entry->uvaddr = addr;
+  mmap_entry->page_num = ofs / PGSIZE;
+  mmap_entry->file = f;
+  if (!page_lazy_load (f, 0, addr, _MMAP, read_bytes, zero_bytes, true))
     return result;
   
   list_push_back (&cur->mmap_list, &mmap_entry->elem);
@@ -469,10 +478,75 @@ syscall_mmap (int fd, void *addr)
 static void 
 syscall_munmap (mapid_t mapping)
 {
-  //
+
+  struct thread *cur = thread_current ();
+  struct list_elem *e = list_begin (&cur->mmap_list);
+  struct list_elem *next;
+  while (e != list_end (&cur->mmap_list))
+    {
+      next = list_next (e);
+      struct mmap_entry *mmp_e = list_entry (e, struct mmap_entry, elem);
+      /* If we find the mmap entry need to be unmapped */
+      if (mmp_e->mmap_id == mapping)
+        {
+          free_mmap_entry (mmp_e);
+          list_remove (e);
+          free (mmp_e);
+          break;
+        }
+      e = next;
+    }
+  
 }
 
 /* Helper functions */
+static void 
+free_mmap_entry (struct mmap_entry *mmp_e)
+{
+  struct thread *cur = thread_current ();
+  struct page_suppl_entry *spte;
+  unsigned int page_num = mmp_e->page_num;
+  for (unsigned int i = 0; i < page_num; i++)
+    {
+      void *upage = mmp_e->uvaddr + i * PGSIZE;
+      spte = page_hash_find (&cur->suppl_page_table, upage);
+      if (spte == NULL) 
+        continue;
+      /* If page is written, write back to mapped file */
+      if (pagedir_is_dirty (cur->pagedir, upage))
+        { 
+          lock_acquire (&fs_lock);
+          file_write_at (spte->file, upage, spte->read_bytes, spte->ofs);
+          lock_release (&fs_lock);
+        }
+      if (spte->loaded == true)
+        {       
+          palloc_free_frame (pagedir_get_page (cur->pagedir, spte->upage));
+          pagedir_clear_page (cur->pagedir, spte->upage);
+        }
+      hash_delete (&cur->suppl_page_table, &spte->elem); 
+    }
+  file_close (mmp_e->file);
+}
+
+void 
+free_mmap_list (struct thread *t)
+{
+  struct list_elem *e = list_begin (&t->mmap_list);
+  struct list_elem *next;
+  while (e != list_end (&t->mmap_list))
+    {
+      next = list_next (e);
+      struct mmap_entry *mmp_e = list_entry (e, struct mmap_entry, elem);
+      /* If we find the mmap entry need to be unmapped */
+      free_mmap_entry (mmp_e);
+      list_remove (e);
+      free (mmp_e);
+      e = next;
+    }
+}
+
+
 static bool
 check_valid_pointer (void *ptr, uint8_t argc)
 {

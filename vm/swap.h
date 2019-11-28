@@ -1,5 +1,5 @@
-#ifndef VM_SWAP
-#define VM_SWAP
+#ifndef VM_SWAP_H
+#define VM_SWAP_H
 
 #include <stddef.h>
 
