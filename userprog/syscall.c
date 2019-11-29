@@ -36,7 +36,8 @@ static void syscall_munmap (mapid_t mapping);
 
 /* Helper functions */
 static void free_mmap_entry (struct mmap_entry *mmp_e);
-static void check_rw_buffer (void *buffer, unsigned size);
+static void check_rw_buffer (const void *buffer, unsigned size);
+static void self_page_fault_handler (void *fault_addr);
 static bool check_valid_pointer (void *addr, uint8_t argc);
 static bool check_valid_string (char *str);
 static struct file_descriptor *find_opened_file (struct thread *t, int fd);
@@ -45,7 +46,7 @@ static struct file_descriptor *find_opened_file (struct thread *t, int fd);
 static const int SYSCODE_MIN = 0;
 static const int SYSCODE_MAX = 19;
 
-struct intr_frame *global_f;
+static const struct intr_frame *global_f;
 
 void
 syscall_init (void) 
@@ -128,8 +129,6 @@ syscall_handler (struct intr_frame *f)
         int fd = *(esp + 1);
         void *buffer = (void *)*(esp + 2);
         unsigned size = *(esp + 3);
-        if (!check_valid_pointer (buffer + size, 1))
-          syscall_exit (-1);
         f->eax = (uint32_t) syscall_read (fd, buffer, size);
         break;
       }
@@ -327,10 +326,12 @@ syscall_read (int fd, void *buffer, unsigned size)
 {
   int size_read = 0;
   struct file_descriptor *fd_struct = NULL;
+  
   check_rw_buffer (buffer, size);
+  
   if (fd == 1)
     return -1;
-  
+
   if (fd == 0)
     {
       uint8_t *buf = buffer;
@@ -358,7 +359,9 @@ syscall_write (int fd, const void *buffer, unsigned size)
 {  
   int size_write = 0 ;
   struct file_descriptor *fd_struct = NULL;
-  
+
+  //check_rw_buffer (buffer, size);
+
   if (fd == 0)
     return -1;
   
@@ -530,11 +533,47 @@ free_mmap_entry (struct mmap_entry *mmp_e)
 }
 
 static void
-check_rw_buffer (void *buffer, unsigned size)
+check_rw_buffer (const void *buffer, unsigned size)
 {
+  void *buf_iter = pg_round_down (buffer);
+  if (size < PGSIZE)
+    {
+      self_page_fault_handler (buf_iter);
+      self_page_fault_handler (buf_iter + size);
+    }
+  else
+    {
+      for (; buf_iter < buffer+size; buf_iter+= PGSIZE)
+        self_page_fault_handler (buf_iter);
+    }
+}
+
+/* Self page fault handler for checking read/writer buffer, since we cannot
+   let page fault happens when reading or writing bytes. */
+static void
+self_page_fault_handler (void *fault_addr)
+{
+  if (fault_addr == NULL || !is_user_vaddr (fault_addr))
+    syscall_exit (-1);
+
   struct thread *cur = thread_current ();
   bool success = false;
-  bool flag = true;
+
+  if (pagedir_get_page (cur->pagedir, fault_addr) == NULL)
+    {
+      struct page_suppl_entry *spte;
+      spte = page_hash_find (&cur->suppl_page_table, fault_addr);
+      if (spte != NULL)
+        success = page_load (spte);
+      else if (spte == NULL && fault_addr >= PHYS_BASE - STACK_LIMIT 
+               && fault_addr >= global_f->esp - 32)
+        success = stack_grow (fault_addr);
+      if (!success)
+        {
+//          printf("page_load or stk gr fails\n");
+          syscall_exit (-1);
+        }
+    }
 }
 
 static bool
