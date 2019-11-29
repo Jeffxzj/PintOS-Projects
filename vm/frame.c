@@ -39,15 +39,15 @@ palloc_get_frame (enum palloc_flags flags, struct page_suppl_entry *spte)
   return frame;
 }
 
-void
+void 
 palloc_free_frame (void *frame)
 {
   if (frame == NULL)
     return;
   struct list_elem *e;
   lock_acquire (&frame_lock);
-  for (e = list_begin (&frame_table); 
-       e != list_end (&frame_table); 
+  for (e = list_begin (&frame_table);
+       e != list_end (&frame_table);
        e = list_next (e))
     {
       struct ft_entry *ft_entry = list_entry (e, struct ft_entry, elem);
@@ -59,6 +59,27 @@ palloc_free_frame (void *frame)
           break;
         }
     }
+  lock_release (&frame_lock);
+}
+
+void
+palloc_free_all_frame (struct thread *t)
+{
+  if (t == NULL)
+    return;
+  struct list_elem *e = list_begin (&frame_table);
+  lock_acquire (&frame_lock);
+  while (e != list_end (&frame_table))
+  {
+    struct ft_entry *ft_entry = list_entry (e, struct ft_entry, elem);
+    struct list_elem *next = list_next (e);
+    if (ft_entry->owner == t)
+      {
+        list_remove (e);
+        free (ft_entry);
+      }
+    e = next;
+  }
   lock_release (&frame_lock);
 }
 
@@ -82,7 +103,7 @@ evict_frame (struct page_suppl_entry *e)
 
         /* If it hasn't accessed, make it unaccessed to avoid the situation
           that all page has been accessed so no page won't be found*/
-        if (!pagedir_is_accessed (cur->pagedir, f_entry->pte->upage))
+        if (pagedir_is_accessed (cur->pagedir, f_entry->pte->upage))
           pagedir_set_accessed (cur->pagedir, f_entry->pte->upage, false);
 
         /* Found! Swap out and update information. */

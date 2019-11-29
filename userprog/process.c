@@ -234,6 +234,7 @@ process_exit (void)
   /* Free the supplementary page table. */
   free_suppl_page_table (&cur->suppl_page_table);
 
+  palloc_free_all_frame (cur);
   /* Allow my exe file to be writen */
   if (cur->exe_file != NULL)
     file_allow_write (cur->exe_file);

@@ -611,8 +611,8 @@ get_thread_by_tid (tid_t tid)
   struct thread *t;
   struct list_elem *iter;
 
-  for (iter = list_head (&all_list); 
-       iter != list_tail (&all_list); 
+  for (iter = list_begin (&all_list); 
+       iter != list_end (&all_list); 
        iter = list_next(iter))
        {
         t = list_entry (iter, struct thread, allelem);
