@@ -223,7 +223,6 @@ process_exit (void)
   
   /* If parent is waiting for me, wake up my parent, see definition below */
   struct thread *parent = get_thread_by_tid (cur->parent_tid);
-  //free_mmap_list (cur);
 
   if (parent != NULL)
     try_sema_up(parent,cur->tid);
@@ -234,7 +233,6 @@ process_exit (void)
   free_all_open_file (cur);
   /* Free the supplementary page table. */
   free_suppl_page_table (&cur->suppl_page_table);
-  /* Free all mapped files of the current thread. */
 
   /* Allow my exe file to be writen */
   if (cur->exe_file != NULL)

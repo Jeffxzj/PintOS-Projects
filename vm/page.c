@@ -5,6 +5,7 @@
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
+#include "userprog/syscall.h"
 #include "userprog/process.h"
 #include "swap.h"
 
@@ -103,12 +104,17 @@ page_load_file (struct page_suppl_entry *e)
 {
   /* Load the bytes in file into frame */
   void *frame = palloc_get_frame (PAL_USER, e);
-
+  int flag = 0;
   if (frame == NULL)
-    frame = NULL;
-    //frame = evict_frame (e);    
-    
+    return false;
+
+  if (thread_current() != fs_lock.holder){
+    lock_acquire (&fs_lock);
+    flag = 1;
+  }
   off_t actual_size = file_read_at (e->file, frame, e->read_bytes, e->ofs);
+  if (flag == 1)
+    lock_release (&fs_lock);
   /* If reach the end of file, the actual read bytes 
       is not equal to the bytes it should read */
   if (actual_size != (off_t) e->read_bytes)

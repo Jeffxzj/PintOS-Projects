@@ -36,16 +36,16 @@ static void syscall_munmap (mapid_t mapping);
 
 /* Helper functions */
 static void free_mmap_entry (struct mmap_entry *mmp_e);
-static bool check_valid_pointer (void *ptr, uint8_t argc);
+static void check_rw_buffer (void *buffer, unsigned size);
+static bool check_valid_pointer (void *addr, uint8_t argc);
 static bool check_valid_string (char *str);
 static struct file_descriptor *find_opened_file (struct thread *t, int fd);
-
-/* Lock to protect file system operations. */
-static struct lock fs_lock;      
-
+    
 /* Constants to check bound of syscall code */
 static const int SYSCODE_MIN = 0;
 static const int SYSCODE_MAX = 19;
+
+struct intr_frame *global_f;
 
 void
 syscall_init (void) 
@@ -57,7 +57,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-
+  global_f = f;
   uint32_t *esp = f->esp;   /* convert f->esp to integer pointer */
 
   int sys_code = *esp;
@@ -198,6 +198,7 @@ syscall_exit (int status)
   struct thread *parent = get_thread_by_tid (cur->parent_tid);
   cur->exit_code = status;
   
+  /* When a process exits, implicitly unmap all the mapped files */
   for (mapid_t i = 0; i < cur->mmf_num; i++)
     syscall_munmap (i);
   
@@ -326,7 +327,7 @@ syscall_read (int fd, void *buffer, unsigned size)
 {
   int size_read = 0;
   struct file_descriptor *fd_struct = NULL;
-  
+  check_rw_buffer (buffer, size);
   if (fd == 1)
     return -1;
   
@@ -426,7 +427,6 @@ static mapid_t
 syscall_mmap (int fd, void *addr)
 {
   mapid_t result = -1;
-
   /* Console input and output are not mappable. */
   if (fd == 0 || fd == 1)
     return result;
@@ -529,37 +529,23 @@ free_mmap_entry (struct mmap_entry *mmp_e)
   file_close (mmp_e->file);
 }
 
-void 
-free_mmap_list (struct thread *t)
-{
-  struct list_elem *e = list_begin (&t->mmap_list);
-  struct list_elem *next;
-  while (e != list_end (&t->mmap_list))
-    {
-      next = list_next (e);
-      struct mmap_entry *mmp_e = list_entry (e, struct mmap_entry, elem);
-      /* If we find the mmap entry need to be unmapped */
-      free_mmap_entry (mmp_e);
-      list_remove (e);
-      free (mmp_e);
-      e = next;
-    }
-}
-
-
-static bool
-check_valid_pointer (void *ptr, uint8_t argc)
+static void
+check_rw_buffer (void *buffer, unsigned size)
 {
   struct thread *cur = thread_current ();
-  uint32_t *iter = ptr;
+  bool success = false;
+  bool flag = true;
+}
+
+static bool
+check_valid_pointer (void *addr, uint8_t argc)
+{
+  //struct thread *cur = thread_current ();
+  uint32_t *iter = addr;
   for (uint8_t i = 0; i < argc; i++, iter++)
     {
-      /* Check if ptr is in user virtual address */
       if (!is_user_vaddr (iter))
         return false;
-      /* Check if ptr is allocated within the current thread's pages */      
-      if (pagedir_get_page (cur->pagedir, iter) == NULL)
-        return false;        
     }
   return true;
 }

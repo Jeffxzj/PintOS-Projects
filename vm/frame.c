@@ -15,20 +15,21 @@ frame_table_init (void)
 }
 
 void *
-palloc_get_frame (enum palloc_flags flags, struct page_suppl_entry *pte)
+palloc_get_frame (enum palloc_flags flags, struct page_suppl_entry *spte)
 {
   if (!(flags & PAL_USER))
     return NULL;
   
   void *frame = palloc_get_page (flags);
+
   if (frame == NULL)
-    return evict_frame (pte);
+    return evict_frame (spte);
 
   struct ft_entry *ft_entry = malloc (sizeof (struct ft_entry));
   if (ft_entry == NULL)
     return NULL;
   
-  ft_entry->pte = pte;
+  ft_entry->pte = spte;
   ft_entry->frame = frame;
   ft_entry->owner = thread_current ();
 
@@ -64,7 +65,7 @@ palloc_free_frame (void *frame)
 void *
 evict_frame (struct page_suppl_entry *e)
 {
-
+  // printf("test\n");
   struct thread *cur = thread_current ();
   while (true)
   {
@@ -122,7 +123,6 @@ evict_frame (struct page_suppl_entry *e)
             return evi_frame;
           }
         lock_release (&frame_lock);
-
       }
   }
 }

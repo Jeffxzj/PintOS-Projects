@@ -164,14 +164,12 @@ page_fault (struct intr_frame *f)
     success = page_load (spte);
   
   if (spte == NULL && fault_addr >= PHYS_BASE - STACK_LIMIT 
-      && fault_addr >= f->esp -32 )
+      && fault_addr >= f->esp - 32)
     success = stack_grow (fault_addr);
-
 
   if (!success)
     syscall_exit (-1);
       
-
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
@@ -182,4 +180,3 @@ page_fault (struct intr_frame *f)
   //         user ? "user" : "kernel");
   // kill (f);
 }
-
