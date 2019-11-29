@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Zijun Xu <xuzj@shanghaitech.edu.cn>
+Runze Yuan <yuanrz@shanghaitech.edu.cn>
 
 ---- PRELIMINARIES ----
 
@@ -20,6 +19,7 @@ FirstName LastName <email@domain.example>
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
+https://github.com/codyjack/OS-pintos
 
 			PAGE TABLE MANAGEMENT
 			=====================
@@ -29,6 +29,24 @@ FirstName LastName <email@domain.example>
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+struct page_suppl_entry 
+	{
+		struct file* file;
+		enum spte_type type;
+
+		uint8_t *upage;
+
+		off_t ofs; 
+		uint32_t read_bytes; 
+		uint32_t zero_bytes; 
+		bool writable;
+		bool loaded;
+
+		size_t swap_idx;
+
+		struct hash_elem elem;  
+	};
 
 ---- ALGORITHMS ----
 
@@ -58,6 +76,21 @@ Using frame_lock to ensure mutual exclusion when adding new frames.
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+struct list frame_table;
+struct lock frame_lock;
+
+struct ft_entry
+	{
+		void *frame;
+		struct page_suppl_entry *pte;
+		struct thread *owner;
+		struct list_elem elem;
+	};
+
+struct block *swap_block;
+struct bitmap *swap_map;
+struct lock swap_lock;
 
 ---- ALGORITHMS ----
 
@@ -112,6 +145,21 @@ Using frame_lock to ensure mutual exclusion when adding new frames.
 >> C1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+struct thread
+	{
+		struct list mmap_list;              /* List of memory mapped files. */
+		mapid_t mmf_num;
+	}
+
+struct mmap_entry
+  {
+    mapid_t mmap_id;
+    void *uvaddr;
+    struct file *file;
+    unsigned int page_num;
+    struct list_elem elem;
+  };
 
 ---- ALGORITHMS ----
 
