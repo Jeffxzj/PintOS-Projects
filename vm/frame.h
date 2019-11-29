@@ -21,4 +21,5 @@ void *palloc_get_frame (enum palloc_flags, struct page_suppl_entry *pte);
 void palloc_free_all_frame (struct thread *t);
 void palloc_free_frame (void *frame);
 void *evict_frame (struct page_suppl_entry *e);
+
 #endif

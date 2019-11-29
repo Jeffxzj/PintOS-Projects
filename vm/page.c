@@ -143,9 +143,12 @@ page_load_file (struct page_suppl_entry *e)
 bool
 page_load_swap (struct page_suppl_entry *e)
 {
+  /* When a page whose type is swap loads, its frame is in swap slot */
+  /* Get a new frame */
   void *frame = palloc_get_frame (PAL_USER, e);
-
+  /* Swap in the data in swap slot */
   swap_in (frame, e->swap_idx);
+  /* Remap the page table with upage */
   if (!install_page (e->upage, frame, e->writable))
   {
     palloc_free_frame (frame);
@@ -153,7 +156,6 @@ page_load_swap (struct page_suppl_entry *e)
   }
   e->loaded = true;
   return true;
-  
 }
 
 bool 
@@ -188,6 +190,7 @@ page_lazy_load (struct file *file, off_t ofs, uint8_t *upage,
                                page_zero_bytes, writable);
       if (spte == NULL)
         return false;
+        
       if (!page_hash_insert (&thread_current ()->suppl_page_table, spte))
         {
           free (spte);
@@ -204,17 +207,21 @@ page_lazy_load (struct file *file, off_t ofs, uint8_t *upage,
 bool 
 stack_grow (void *fault_addr)
 {
+
   if (fault_addr == NULL) 
     return false;
      
   struct page_suppl_entry *pte;
   struct thread *cur = thread_current ();
-  pte = malloc (sizeof (struct page_suppl_entry));
 
+  /* Maintain a pte */
+  pte = malloc (sizeof (struct page_suppl_entry));
   pte->loaded = true;
   pte->writable = true;
   pte->upage = pg_round_down (fault_addr);
+  pte->type = _SWAP;
 
+  /* Get an empty frame */
   void *frame = palloc_get_frame (PAL_USER, pte);
   if (frame == NULL)
     {
@@ -222,6 +229,7 @@ stack_grow (void *fault_addr)
       return false;
     }
 
+  /* Map the frame and frame */
   if (!install_page (pte->upage, frame, pte->writable))
     {
       free (pte);
@@ -229,12 +237,13 @@ stack_grow (void *fault_addr)
       return false;
     }
 
+  /* Insert the pte */
   if (!page_hash_insert (&cur->suppl_page_table, pte))
-  {
-    free (pte);
-    palloc_free_frame (frame);
-    return false;
-  }
+    {
+      free (pte);
+      palloc_free_frame (frame);
+      return false;
+    }
 
   return true;
 }

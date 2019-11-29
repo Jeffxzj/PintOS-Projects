@@ -5,7 +5,7 @@
 #include "filesys/file.h"
 #include "frame.h"
 
-#define STACK_LIMIT 8*(1 << 20)
+#define STACK_LIMIT 8*1024*1024
 
 enum spte_type 
 {
@@ -19,19 +19,20 @@ struct page_suppl_entry
   struct file* file;
   enum spte_type type;
 
-  uint8_t *upage;
+  uint8_t *upage; /* Virtual address */
 
+  /* File information */
   off_t ofs; 
-  uint32_t read_bytes; 
-  uint32_t zero_bytes; 
+  uint32_t read_bytes; /* Actual data bytes */
+  uint32_t zero_bytes; /* Pagesize - read_bytes */
   bool writable;
-  bool loaded;
+  bool loaded; /* If it has been loaded */
 
-  size_t swap_idx;
+  size_t swap_idx;/* Index of swap slot */
 
   struct hash_elem elem;  
 };
-
+/* Create a supplemental page table entry providing information */
 struct page_suppl_entry *page_create_spte (struct file *file,  off_t offset, 
                                            uint8_t *upage, enum spte_type type, 
                                            uint32_t read_bytes, 
@@ -40,24 +41,21 @@ struct page_suppl_entry *page_create_spte (struct file *file,  off_t offset,
 
 /* Returns a hash value for page p. */
 unsigned page_hash_func (const struct hash_elem *p, void *aux);
-
 /* Returns true if page a precedes page b. */
 bool page_hash_less_func (const struct hash_elem *a, 
                           const struct hash_elem *b,
                           void *aux);
-
 bool page_hash_insert (struct hash *table, struct page_suppl_entry *e);
-
 struct page_suppl_entry *page_hash_find (struct hash *table, uint8_t *upage);
 
 void free_suppl_page_table (struct hash *spt);
 
+/* Load functions */
+bool page_load (struct page_suppl_entry *e);
 bool page_load_file (struct page_suppl_entry *e);
 bool page_load_swap (struct page_suppl_entry *e);
-bool page_load_mmp (struct page_suppl_entry *e);
 
-bool page_load (struct page_suppl_entry *e);
-
+/* Used in process.c to for lazy load */
 bool page_lazy_load (struct file *file, off_t ofs, uint8_t *upage, 
                      enum spte_type type, uint32_t read_bytes, 
                      uint32_t zero_bytes, bool writable);

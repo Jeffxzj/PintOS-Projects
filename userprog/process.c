@@ -111,7 +111,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-  hash_init (&cur->suppl_page_table, page_hash_func, page_hash_less_func, NULL);
+  hash_init (&cur->suppl_page_table,page_hash_func, page_hash_less_func, NULL);
 
   /* Extract the the exec name */
   exe_name = strtok_r(file_name, " ", &save_ptr);
@@ -233,8 +233,9 @@ process_exit (void)
   free_all_open_file (cur);
   /* Free the supplementary page table. */
   free_suppl_page_table (&cur->suppl_page_table);
-
+  /* Free the frame_entry correspoding to the current thread */
   palloc_free_all_frame (cur);
+  
   /* Allow my exe file to be writen */
   if (cur->exe_file != NULL)
     file_allow_write (cur->exe_file);

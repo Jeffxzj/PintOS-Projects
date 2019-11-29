@@ -159,10 +159,12 @@ page_fault (struct intr_frame *f)
 
   struct thread *cur = thread_current ();
   spte = page_hash_find (&cur->suppl_page_table, fault_addr);
-
+  /* If found, load the page of the file into memory */
   if (spte != NULL )
     success = page_load (spte);
   
+  /* If not found, check the condition to 
+     determine if the stack need to grow */
   if (spte == NULL && fault_addr >= PHYS_BASE - STACK_LIMIT 
       && fault_addr >= f->esp - 32)
     success = stack_grow (fault_addr);

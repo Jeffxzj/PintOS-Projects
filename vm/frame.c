@@ -19,12 +19,14 @@ palloc_get_frame (enum palloc_flags flags, struct page_suppl_entry *spte)
 {
   if (!(flags & PAL_USER))
     return NULL;
-  
+  /* Get a frame from memory */
   void *frame = palloc_get_page (flags);
 
+  /* If there are no frame can be got, ready to evict a frame */
   if (frame == NULL)
     return evict_frame (spte);
 
+  /* Maintain an ft_entry */
   struct ft_entry *ft_entry = malloc (sizeof (struct ft_entry));
   if (ft_entry == NULL)
     return NULL;
@@ -69,12 +71,16 @@ palloc_free_all_frame (struct thread *t)
     return;
   struct list_elem *e = list_begin (&frame_table);
   lock_acquire (&frame_lock);
+  /* Traverse the list to free all ft_entry */ 
   while (e != list_end (&frame_table))
   {
     struct ft_entry *ft_entry = list_entry (e, struct ft_entry, elem);
     struct list_elem *next = list_next (e);
     if (ft_entry->owner == t)
       {
+        /* Note that it need not call palloc_free_page() to free frame
+           Since the frame will be freed in process_exit() in process.c
+           using pagedir_destroy() */
         list_remove (e);
         free (ft_entry);
       }
@@ -86,7 +92,7 @@ palloc_free_all_frame (struct thread *t)
 void *
 evict_frame (struct page_suppl_entry *e)
 {
-  // printf("test\n");
+
   struct thread *cur = thread_current ();
   while (true)
   {
@@ -95,13 +101,13 @@ evict_frame (struct page_suppl_entry *e)
          search != list_end (&frame_table); 
          search = list_next (search))
       {
-        lock_acquire (&frame_lock);
+        
         /* Lock it to make sure it won't be interrupted by 
           palloc_free_frame() or palloc_get_frame() */
-
+        lock_acquire (&frame_lock);
         struct ft_entry* f_entry = list_entry (search, struct ft_entry, elem);
 
-        /* If it hasn't accessed, make it unaccessed to avoid the situation
+        /* If it has been accessed, make it unaccessed to avoid the situation
           that all page has been accessed so no page won't be found*/
         if (pagedir_is_accessed (cur->pagedir, f_entry->pte->upage))
           pagedir_set_accessed (cur->pagedir, f_entry->pte->upage, false);
@@ -111,25 +117,37 @@ evict_frame (struct page_suppl_entry *e)
           {
             /* For conveniece, get needed information */
             void *evi_frame = f_entry->frame;
+            struct page_suppl_entry *evi_pte = f_entry->pte;
             uint8_t *upage = f_entry->pte->upage;
             struct thread* owner = f_entry->owner;
 
-            /* We will swap out the original upage, so set
-               original pte type to SWAP */
-            f_entry->pte->type = _SWAP;
+            /* For a dirty page, write it back */
+            if (pagedir_is_dirty (cur->pagedir, evi_pte->upage) && 
+                (evi_pte ->type == _MMAP))
+              {
+                file_write_at (evi_pte->file,evi_pte->upage,
+                               evi_pte->read_bytes,evi_pte->ofs);
+              } 
+            else
+              {
+                /* We will swap out the original upage, so set
+                original pte type to SWAP */
+                /* Swap and get index, record the index for reloading */
+                f_entry->pte->type = _SWAP;
+                size_t idx = swap_out (evi_frame);
+                f_entry->pte->swap_idx = idx;
+              }
 
-            /* Set the originalupage in page table to not present */
-            /* Swap and get index, record the index for reloading */
+
+            /* Set the original upage in page table to not present */
             pagedir_clear_page (owner->pagedir, upage);
-            size_t idx = swap_out (evi_frame);
-            f_entry->pte->swap_idx = idx;
+
         
             /* Now we get a evicted frame, set it all zero, so we can
               load other file later */
             memset (evi_frame, 0, PGSIZE);
 
-            /* Remove the original fr_entry in frame table. 
-               Murder people and his heart! */
+            /* Remove the original fr_entry in frame table. */
             list_remove (&f_entry->elem);
             free (f_entry);
 
