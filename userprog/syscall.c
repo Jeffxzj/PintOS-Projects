@@ -36,7 +36,7 @@ static void syscall_munmap (mapid_t mapping);
 
 /* Helper functions */
 static void free_mmap_entry (struct mmap_entry *mmp_e);
-static void check_rw_buffer (const void *buffer, unsigned size);
+static void check_read_buffer (void *buffer, unsigned size);
 static void self_page_fault_handler (void *fault_addr);
 static bool check_valid_pointer (void *addr, uint8_t argc);
 static bool check_valid_string (char *str);
@@ -327,7 +327,7 @@ syscall_read (int fd, void *buffer, unsigned size)
   int size_read = 0;
   struct file_descriptor *fd_struct = NULL;
   
-  check_rw_buffer (buffer, size);
+  check_read_buffer (buffer, size);
   
   if (fd == 1)
     return -1;
@@ -343,11 +343,10 @@ syscall_read (int fd, void *buffer, unsigned size)
   fd_struct = find_opened_file (thread_current(), fd);
   if (fd_struct == NULL || fd_struct->file == NULL)
     return -1;
-  
+
   lock_acquire (&fs_lock);
   size_read = file_read (fd_struct->file, buffer, size);
   lock_release (&fs_lock);
-  
   return size_read;
 }
 
@@ -359,8 +358,6 @@ syscall_write (int fd, const void *buffer, unsigned size)
 {  
   int size_write = 0 ;
   struct file_descriptor *fd_struct = NULL;
-
-  //check_rw_buffer (buffer, size);
 
   if (fd == 0)
     return -1;
@@ -446,7 +443,7 @@ syscall_mmap (int fd, void *addr)
     return result;
 
   struct thread *cur = thread_current ();
-  uint32_t ofs = 0;
+  off_t ofs = 0;
   for (ofs = 0; ofs < read_bytes; ofs += PGSIZE)
     {
       /* If the range of pages mapped overlaps any existing mapped pages. */
@@ -533,18 +530,26 @@ free_mmap_entry (struct mmap_entry *mmp_e)
 }
 
 static void
-check_rw_buffer (const void *buffer, unsigned size)
+check_read_buffer (void *buffer, unsigned size)
 {
-  void *buf_iter = pg_round_down (buffer);
+  void *buf_iter = buffer;
   if (size < PGSIZE)
     {
       self_page_fault_handler (buf_iter);
       self_page_fault_handler (buf_iter + size);
     }
   else
-    {
-      for (; buf_iter < buffer+size; buf_iter+= PGSIZE)
+    {  
+      buf_iter = pg_round_down (buf_iter);
+      unsigned page_num;
+      page_num = size % PGSIZE == 0 ? size / PGSIZE : size / PGSIZE + 1;
+      for (unsigned i = 0; i < page_num + 1; i++, buf_iter += PGSIZE)
         self_page_fault_handler (buf_iter);
+      /*
+      for (unsigned i = 0; i < size; i++, buf_iter++){
+        self_page_fault_handler (buf_iter);
+      }
+      */
     }
 }
 
@@ -565,14 +570,10 @@ self_page_fault_handler (void *fault_addr)
       spte = page_hash_find (&cur->suppl_page_table, fault_addr);
       if (spte != NULL)
         success = page_load (spte);
-      else if (spte == NULL && fault_addr >= PHYS_BASE - STACK_LIMIT 
-               && fault_addr >= global_f->esp - 32)
+      else if (fault_addr >= global_f->esp - 32)
         success = stack_grow (fault_addr);
       if (!success)
-        {
-//          printf("page_load or stk gr fails\n");
-          syscall_exit (-1);
-        }
+        syscall_exit (-1);
     }
 }
 
