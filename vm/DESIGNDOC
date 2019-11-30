@@ -45,7 +45,7 @@ struct page_suppl_entry
 		enum spte_type type;     /* Type of the file */
 
 		uint8_t *upage;          /* User virtual address, unique identifier for a
-															  page, useful for hash
+															  page, key for hash table */
 		off_t ofs; 
 		uint32_t read_bytes;     /* Bytes at UPAGE must be read from file
           										  starting at OFS */

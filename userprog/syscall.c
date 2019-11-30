@@ -423,6 +423,8 @@ syscall_close (int fd)
   lock_release (&fs_lock);
 }
 
+/* Maps the file open as fd into the process's virtual address space. The 
+   entire file is mapped into consecutive virtual pages starting at addr. */
 static mapid_t
 syscall_mmap (int fd, void *addr)
 {
@@ -475,10 +477,12 @@ syscall_mmap (int fd, void *addr)
   return result;
 }
 
+/* Unmaps the mapping designated by mapping, which must be a mapping ID 
+   returned by a previous call to mmap by the same process that has not yet 
+   been unmapped. */
 static void 
 syscall_munmap (mapid_t mapping)
 {
-
   struct thread *cur = thread_current ();
   struct list_elem *e = list_begin (&cur->mmap_list);
   struct list_elem *next;
@@ -498,7 +502,9 @@ syscall_munmap (mapid_t mapping)
     }
 }
 
-/* Helper functions */
+/**************************  Helper functions ********************************/
+
+/* Free all the related resources of the memory mapped file. */
 static void 
 free_mmap_entry (struct mmap_entry *mmp_e)
 {
@@ -511,13 +517,14 @@ free_mmap_entry (struct mmap_entry *mmp_e)
       spte = page_hash_find (&cur->suppl_page_table, upage);
       if (spte == NULL) 
         continue;
-      /* If page is written, write back to mapped file */
+      /* If the page is written, write the data back to mapped file. */
       if (pagedir_is_dirty (cur->pagedir, upage))
         { 
           lock_acquire (&fs_lock);
           file_write_at (spte->file, upage, spte->read_bytes, spte->ofs);
           lock_release (&fs_lock);
         }
+      /* Free the frame if allocated. */
       if (spte->loaded == true)
         {       
           palloc_free_frame (pagedir_get_page (cur->pagedir, spte->upage));
@@ -528,6 +535,8 @@ free_mmap_entry (struct mmap_entry *mmp_e)
   file_close (mmp_e->file);
 }
 
+/* Check each page the buffer area may occupy, we cannot let the page
+   fault happens on buffer, we will handle it manually instead. */
 static void
 check_read_buffer (void *buffer, unsigned size)
 {
@@ -544,16 +553,11 @@ check_read_buffer (void *buffer, unsigned size)
       page_num = size % PGSIZE == 0 ? size / PGSIZE : size / PGSIZE + 1;
       for (unsigned i = 0; i < page_num + 1; i++, buf_iter += PGSIZE)
         self_page_fault_handler (buf_iter);
-      /*
-      for (unsigned i = 0; i < size; i++, buf_iter++){
-        self_page_fault_handler (buf_iter);
-      }
-      */
     }
 }
 
-/* Self page fault handler for checking read/writer buffer, since we cannot
-   let page fault happens when reading or writing bytes. */
+/* Self page fault handler for checking read buffer, since we cannot
+   let page fault happens when reading bytes. */
 static void
 self_page_fault_handler (void *fault_addr)
 {
@@ -563,6 +567,7 @@ self_page_fault_handler (void *fault_addr)
   struct thread *cur = thread_current ();
   bool success = false;
 
+  /* If fault addr is not mapped */
   if (pagedir_get_page (cur->pagedir, fault_addr) == NULL)
     {
       struct page_suppl_entry *spte;
@@ -579,7 +584,6 @@ self_page_fault_handler (void *fault_addr)
 static bool
 check_valid_pointer (void *addr, uint8_t argc)
 {
-  //struct thread *cur = thread_current ();
   uint32_t *iter = addr;
   for (uint8_t i = 0; i < argc; i++, iter++)
     {

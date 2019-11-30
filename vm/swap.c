@@ -9,20 +9,20 @@
 
 const size_t SECTOR_NUM = PGSIZE / BLOCK_SECTOR_SIZE;  /* Sectors per page. */
 
-struct block *swap_block;
-struct bitmap *swap_map;
-struct lock swap_lock;
+struct block *swap_block;  /* The block disk for swapping space */
+
+struct bitmap *swap_map;   /* Bitmap to indicate a swap slot is used or not */
+															
+struct lock swap_lock;     /* Lock to protect the operations on swap_map */
 
 void
 swap_table_init (void)
 {
   swap_block = block_get_role (BLOCK_SWAP);
-
   if (swap_block == NULL)
     PANIC ("block device cannot be initialized\n");
   
   swap_map = bitmap_create (block_size (swap_block) / SECTOR_NUM);
-
   if (swap_map == NULL)
     PANIC ("bitmap creation fails\n");
   
