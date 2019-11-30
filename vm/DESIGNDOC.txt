@@ -1,8 +1,8 @@
-        +---------------------------+
-		    | CS 140                    |
-		    | PROJECT 3: VIRTUAL MEMORY	|
-		    |	DESIGN DOCUMENT           |
-		    +---------------------------+
+            +---------------------------+
+            | CS 140                    |
+            | PROJECT 3: VIRTUAL MEMORY |
+            |   DESIGN DOCUMENT         |
+            +---------------------------+
 
 ---- GROUP ----
 
@@ -21,8 +21,8 @@ Runze Yuan <yuanrz@shanghaitech.edu.cn>
 >> text, lecture notes, and course staff.
 https://github.com/codyjack/OS-pintos
 
-			PAGE TABLE MANAGEMENT
-			=====================
+            PAGE TABLE MANAGEMENT
+            =====================
 
 ---- DATA STRUCTURES ----
 
@@ -42,24 +42,25 @@ enum spte_type
 
 /* Supplementary page table entry for hash table storing it */
 struct page_suppl_entry 
-	{
-		struct file* file;       /* Store file pointer for loading */
-		enum spte_type type;     /* Type of the file */
+  {
+    struct file* file;       /* Store file pointer for loading */
+    enum spte_type type;     /* Type of the file */
 
-		uint8_t *upage;          /* User virtual address, unique identifier for a
-															  page, key for hash table */
-		off_t ofs; 
-		uint32_t read_bytes;     /* Bytes at UPAGE must be read from file
-          										  starting at OFS */
-		uint32_t zero_bytes;     /* Bytes at UPAGE + READ_BYTES must be zeroed. */
-		bool writable;           /* False if the page is read-only */
-		bool loaded;             /* True if the page is loaded to physical addr */
+    uint8_t *upage;          /* User virtual address, unique identifier for 
+                                a page, key for hash table */
+    off_t ofs; 
+    uint32_t read_bytes;     /* Bytes at UPAGE must be read from file
+                                starting at OFS */
+                                
+    uint32_t zero_bytes;     /* Bytes at UPAGE + READ_BYTES must be zeroed. */
+    bool writable;           /* False if the page is read-only */
+    bool loaded;             /* True if the page is loaded to physical addr */
 
-		size_t swap_idx;         /* Index on swap bitmap returned by swap_out() */
+    size_t swap_idx;         /* Index on swap bitmap returned by swap_out() */
 
     struct lock pte_lock;    /* For pte synchronization */
-		struct hash_elem elem;   /* Hash table element */
-	};
+    struct hash_elem elem;   /* Hash table element */
+  };
 
 In `userprog/thread.h`
 
@@ -138,8 +139,8 @@ this project since we apply the lazy load policy, so we need a fast way to find
 an entry from the table. Therefore, we use hash table which need only O(1) time
 on average to extract a specific element.
 
-		       PAGING TO AND FROM DISK
-		       =======================
+               PAGING TO AND FROM DISK
+               =======================
 
 ---- DATA STRUCTURES ----
 
@@ -153,19 +154,19 @@ struct list frame_table;
 struct lock frame_lock;
 
 struct ft_entry
-	{
-		void *frame;
-		struct page_suppl_entry *pte;
-		struct thread *owner;
-		struct list_elem elem;
-	};
+  {
+    void *frame;
+    struct page_suppl_entry *pte;
+    struct thread *owner;
+    struct list_elem elem;
+  };
 
 In `vm/swap.h`
 
 struct block *swap_block;  /* The block disk for swapping space */
 
 struct bitmap *swap_map;   /* Bitmap to indicate a swap slot is used or not */
-															
+                                                            
 struct lock swap_lock;     /* Lock to protect the operations on swap_map */
 
 ---- ALGORITHMS ----
@@ -321,8 +322,8 @@ If we use a global lock, then swap operation and evict operation will not
 appear at the same time, which will cause low parallelism.
 
 
-			 MEMORY MAPPED FILES
-			 ===================
+             MEMORY MAPPED FILES
+             ===================
 
 ---- DATA STRUCTURES ----
 
@@ -334,16 +335,16 @@ appear at the same time, which will cause low parallelism.
 /* These two new data structures added to thread are similar to the
    fd_list and file_num added to thread for project 2 */
 struct thread
-	{
-		//....
-		struct list mmap_list; /* List for all memory mapped files in a thread */
-		mapid_t mmf_num;			 /* Unique number to identify each mapped file */
-	}
+  {
+    //....
+    struct list mmap_list; /* List for all memory mapped files in a thread */
+    mapid_t mmf_num;       /* Unique number to identify each mapped file */
+  }
 
 struct mmap_entry
   {
     mapid_t mmap_id;       /* Unique number to identify a mapped file */
-    void *uvaddr;					 /* Unique user virtual address for first page */
+    void *uvaddr;          /* Unique user virtual address for first page */
     struct file *file;     /* File pointer */
     unsigned int page_num; /* Number of pages the mmap file will have */
     struct list_elem elem; /* List element for mmap_list */
@@ -412,8 +413,8 @@ needed when we apply our lazy load policy by calling page_lazy_load() and
 page_load_file(). Therefore, we share much of the code for the two situations 
 except the spte_type for the demand of frame eviction.
 
-			   SURVEY QUESTIONS
-			   ================
+               SURVEY QUESTIONS
+               ================
 
 Answering these questions is optional, but it will help us improve the
 course in future quarters.  Feel free to tell us anything you
