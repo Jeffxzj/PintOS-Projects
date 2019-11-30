@@ -177,7 +177,7 @@ struct lock swap_lock;     /* Lock to protect the operations on swap_map */
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-/* In 'thread.h' */
+/* Under 'thread.h' */
 /* These two new data structures added to thread are similar to the
    fd_list and file_num added to thread for project 2 */
 struct thread
@@ -202,8 +202,43 @@ struct mmap_entry
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
+When a user call the syscall mmap(), we will first validate that mapping, such
+as the validation of mapping addr. If the mapping passed the check, we will
+reopen a new file pointer and malloc() an mmap_entry to store the file pointer
+and the required information. The mmf_num of the current thread will increase,
+and the new mmap_entry will have a unique mmap_id under the current thread.
+Then we will call page_lazy_load() to create new SPT entries for this mmap file 
+and insert them to the SPT. Finally we insert the mmap_entry to mmap_list and 
+return the corresponding mmap_id if the mapping is successfully created.
+
+When a user call syscall munmap(), we will iterate the whole mmap_list and find
+the corresponding file by mmap_id and free all the related resources, like the
+created SPT entries and frames if allocated, then delete it from the mmap_list.
+Note that if the mmap file write to some pages, we will write back the content
+back to the file. 
+
+The page fault handler treats swap pages and other pages with a slight 
+difference. For both situations, the page fault handler will allocate new
+frames and install the page. However, for swap pages, the data is get from swap
+slots but for other pages(data or mmap files), data is get from files.
+
+There is no difference between swap pages and other pages when deciding which
+frame to evict. All the frames can be evicted, and the data will be swap out
+the corresponding swap slots. The spte_type of any evicted page will be changed
+to _SWAP after eviction. For mmap files, if its pages are dirty, we will write
+its data back to file. For all kinds of pages, page is uninstalled and an
+empty frame will replace the original.
+
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> another segment, either at the time the mapping is created or later.
+
+We implement this before the mapping is created, since under this situation a
+mmap() syscall should immediately fail. Since we can get the file length of the
+file we are going to map, then we can use a loop to check if the user addr 
+starting from ADDR to (ADDR + file length) is already mapped by other pages or
+there is already a page table entry occupying that address space. We use
+pagedir_get_page() and page_hash_find() to do this check. If one of the two 
+situations happens, we immediately return -1 to fail this mapping.
 
 ---- RATIONALE ----
 
@@ -213,6 +248,16 @@ struct mmap_entry
 >> that much of their implementation can be shared.  Explain why your
 >> implementation either does or does not share much of the code for
 >> the two situations.
+
+In our implementation, they do share much of the code. In SPT entry, they share
+all the member values except their spte_type is different, one is _FILE and the
+other is _MMAP. This slight difference is demanded during eviction, we need to
+write back _MMAP file content to their original files from a dirty page. For
+data demand-paged from executables, they are written to swap area and their 
+spte_type will changed to _SWAP after that. Other values they share are all 
+needed when we apply our lazy load policy by calling page_lazy_load() and 
+page_load_file(). Therefore, we share much of the code for the two situations 
+except the spte_type for the demand of frame eviction.
 
 			   SURVEY QUESTIONS
 			   ================

@@ -496,7 +496,6 @@ syscall_munmap (mapid_t mapping)
         }
       e = next;
     }
-  
 }
 
 /* Helper functions */
