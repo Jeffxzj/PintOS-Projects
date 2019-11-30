@@ -278,6 +278,11 @@ the quarter.
 >> future quarters to help them solve the problems?  Conversely, did you
 >> find any of our guidance to be misleading?
 
+Some questions under "PAGING TO AND FROM DISK"->"synchronization" is repeated
+and some questions are hard to answer if students do not implement such design. 
+The tests of Pintos do not gives such check on synchronization. So I wonder if
+some of the questions will be optional depends on students' actual design.
+
 >> Do you have any suggestions for the TAs to more effectively assist
 >> students, either for future quarters or the remaining projects?
 
