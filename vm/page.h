@@ -29,7 +29,8 @@ struct page_suppl_entry
   bool loaded; /* If it has been loaded */
 
   size_t swap_idx;/* Index of swap slot */
-
+  
+  struct lock pte_lock;
   struct hash_elem elem;  
 };
 /* Create a supplemental page table entry providing information */

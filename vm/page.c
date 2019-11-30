@@ -52,6 +52,7 @@ page_create_spte (struct file *file,  off_t offset, uint8_t *upage,
   e->zero_bytes = zero_bytes;
   e->writable = writable;
   e->loaded = false;
+  lock_init(&e->pte_lock);
   
   return e;
 }
@@ -106,7 +107,8 @@ page_load_file (struct page_suppl_entry *e)
   void *frame = palloc_get_frame (PAL_USER, e);
   if (frame == NULL)
     return false;
-  
+
+  lock_acquire (&e->pte_lock);
   bool fs_locked = false;  
   if (thread_current() != fs_lock.holder)
     {
@@ -137,6 +139,7 @@ page_load_file (struct page_suppl_entry *e)
     }
   
   e->loaded = true;
+  lock_release (&e->pte_lock);
   return true;
 }
 
@@ -147,6 +150,8 @@ page_load_swap (struct page_suppl_entry *e)
   /* Get a new frame */
   void *frame = palloc_get_frame (PAL_USER, e);
   /* Swap in the data in swap slot */
+
+  lock_acquire (&e->pte_lock);
   swap_in (frame, e->swap_idx);
   /* Remap the page table with upage */
   if (!install_page (e->upage, frame, e->writable))
@@ -155,6 +160,7 @@ page_load_swap (struct page_suppl_entry *e)
     return false;
   }
   e->loaded = true;
+  lock_release (&e->pte_lock);
   return true;
 }
 
@@ -220,6 +226,7 @@ stack_grow (void *fault_addr)
   pte->writable = true;
   pte->upage = pg_round_down (fault_addr);
   pte->type = _SWAP;
+  lock_init (&pte->pte_lock);
 
   /* Get an empty frame */
   void *frame = palloc_get_frame (PAL_USER, pte);

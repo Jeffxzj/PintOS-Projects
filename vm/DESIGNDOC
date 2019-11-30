@@ -30,6 +30,8 @@ https://github.com/codyjack/OS-pintos
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In `vm/page.h'
+
 /* Supplementary page table entry type determined by the file type in it. */
 enum spte_type 
 {
@@ -58,19 +60,57 @@ struct page_suppl_entry
 		struct hash_elem elem;   /* Hash table element */
 	};
 
+In `userprog/thread.h`
+
+struct thread {
+
+    struct hash suppl_page_table;       /* Supplementary page table */  
+}
+
 ---- ALGORITHMS ----
 
 >> A2: In a few paragraphs, describe your code for accessing the data
 >> stored in the SPT about a given page.
 
+When we are ready to execute a exe file, we need to first load the content of
+the file into memory. This is done by `load_segment()` function in `process.c`.
+In project2, we load all the content into memory in the beginning. But now,
+we divide this file into several pages, and malloc several pte to store the 
+corresponding information such as file pointer, the data bytes in this page, 
+the offset to the beginning of the file, etc. Then insert these ptes into the
+supplementary page table without loading these. This is called load lazily.
+
+When a page fault occurs, we can get fault address which is the upage, then we
+can use this upage to find the corresponding pte in supplementary page table.
+If it is found, then we need to load this page from the exe file. The 
+information we stored in the pte can lead us to load right data in the file.
+  1.Allocate a new frame, if memory s full evict one. 
+  2.We start to load at the position `ofs` and load `read_bytes` bytes, and 
+    set the rest bytes which is `zero_bytes` to zero. Data of this page goes 
+    into the allocated frame.
+  3.Then map the frame to the pte's upage. This process is to map physical
+    memory to virtual memory, using `install_page()` function.
+Note these pte's type is `FILE`
+
+Another place to create pte is `stack_grow()` function. When a thread touch
+the place past the stack pointer, the stack needs to grow. Then we need to
+malloc a new pte and a new frame, then map and install them. Note that, this
+pte does not have a file pointer, because it is just for stack, and no data
+in any file will be loaded, so the type of this pte is `SWAP`.
+
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
+
+We avoid the issue by avoid the problem by only accessing user data through 
+the user virtual address. 
+In our design, we never use kernel virtual address to touch user data.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
+
 Using frame_lock to ensure mutual exclusion when adding new frames.
 
 ---- RATIONALE ----
@@ -106,6 +146,8 @@ on average to extract a specific element.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+In `vm/frame.h`
+
 struct list frame_table;
 struct lock frame_lock;
 
@@ -116,6 +158,8 @@ struct ft_entry
 		struct thread *owner;
 		struct list_elem elem;
 	};
+
+In `vm/swap.h`
 
 struct block *swap_block;  /* The block disk for swapping space */
 
@@ -128,13 +172,59 @@ struct lock swap_lock;     /* Lock to protect the operations on swap_map */
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
 
+We use a linked list to record all the frames we allocated.
+What we used is clock algorithm. The whole process is
+  1.Interate on this list to get every ft_entry.
+  2.Since we record pte and owner process in this ft_entry struct, we can use 
+    pagedir_is_accessed() function to determine if this frame has been
+    accessed.
+    a.If this frame has been accessed, set the accessed bit to false and 
+      continue iterating.
+    b.If this frame has not been accessed, we get a frame which can be evicted.
+      If this frame is for mmap file, check the dirty. If it is true, write
+      back to the corresponding file.
+      If it is not, we need to use swap function to swap the data in this frame
+      to swap slot for temporary. Then change the type of this page to `SWAP`.
+      Now we get a evicted frame, memset it to all zero and update the other 
+      information about this frame. For example, remove the old ft_entry from
+      the frame table, create a new pte and a new ft_entry, remap this pte to
+      evicted frame, insert the new ft_entry into the frame table, etc.
+      After maintaining all the information, we can return this evicted frame.
+  3.If every frame has been accessed, since we set its accessed bit to false 
+    in procedure 2. Iterate this table again, then we can evict successfully.
+
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
 
+As stated above, when evcited, we delete the ft_entry corresponding to process
+Q, and insert a ft_entry corresponding to process P. Then in frame table, it 
+indicates that this frame belongs to process P rather than process Q.
+
+Also, in evicting process, we use function `pagedir_clear_page()` to mark the
+upage corresponding to this frame to "not present" which will be checked in 
+page_fault_handler.
+
+The two method guarantees that this frame belongs to process P rather than
+process Q.
+
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
+
+In page fault handler, we use fault_addr to find pte firstly, if it is not
+found, then it probably needs stack growth.
+
+After that we need to check the invalidation of the fault address. 
+This address should be within the stack size, so it needs to lager than 
+PHYS_BASE - STACK_LIMIT. The STACK_LIMIT we set defaultly is 8MB.
+Then because of the `PUSH` and `PUSHA` instructions, we check if this 
+fault_addr is larger than esp-32. This also checks if the fault address is
+within stack.
+
+If the conditions above are not satisfied, we probably meet the conditions
+such that the stack is full or it touched the kernel memory, etc. At this point
+the process needs to terminate.
 
 ---- SYNCHRONIZATION ----
 
@@ -142,6 +232,19 @@ struct lock swap_lock;     /* Lock to protect the operations on swap_map */
 >> particular, explain how it prevents deadlock.  (Refer to the
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
+
+In every file operations, such as open, write, etc, we need to add
+lock to guarantee that this operation is atomic. Note that in project2
+and project3, we will both use file operations, so it should use the
+same lock.
+
+In swap_in() and swap_out(), every time we use bitmap_scan_and_flip()
+function we need to acquire a swap lock to ensure that no other process
+can modify the bitmap at the same time.
+
+When we do operations of the frame table, such as palloc_get_frame(),
+evict_frame(), etc. We need to acquire the frame lock to ensure that only 
+one process is modifying the frame table.
 
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
@@ -159,6 +262,8 @@ struct lock swap_lock;     /* Lock to protect the operations on swap_map */
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
 
+
+
 ---- RATIONALE ----
 
 >> B9: A single lock for the whole VM system would make
@@ -167,6 +272,18 @@ struct lock swap_lock;     /* Lock to protect the operations on swap_map */
 >> possibility for deadlock but allows for high parallelism.  Explain
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
+
+We use frame table lock to ensure the frame table can not be modifed
+by multiple threads, this is essential especially in evict_frame() function
+since we must guarantee that during eviction the frame table can not
+modified.
+
+The operation in bitmap must also be atomic, since a process using swap_in 
+can interrupt a process using swap_out. Then a swap lock is needed.
+
+If we use a global lock, then swap operation and evict operation will not
+appear at the same time, which will cause low parallelism.
+
 
 			 MEMORY MAPPED FILES
 			 ===================

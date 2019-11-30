@@ -6,6 +6,7 @@
 #include "threads/vaddr.h"
 #include "swap.h"
 #include "frame.h"
+#include "userprog/syscall.h"
 
 void 
 frame_table_init (void)
@@ -115,6 +116,7 @@ evict_frame (struct page_suppl_entry *e)
         /* Found! Swap out and update information. */
         else
           {
+            lock_acquire (&e->pte_lock);
             /* For conveniece, get needed information */
             void *evi_frame = f_entry->frame;
             struct page_suppl_entry *evi_pte = f_entry->pte;
@@ -125,8 +127,10 @@ evict_frame (struct page_suppl_entry *e)
             if (pagedir_is_dirty (cur->pagedir, evi_pte->upage) && 
                 (evi_pte ->type == _MMAP))
               {
+                lock_acquire (&fs_lock);
                 file_write_at (evi_pte->file,evi_pte->upage,
                                evi_pte->read_bytes,evi_pte->ofs);
+                lock_release (&fs_lock);
               } 
             else
               {
@@ -138,11 +142,9 @@ evict_frame (struct page_suppl_entry *e)
                 f_entry->pte->swap_idx = idx;
               }
 
-
             /* Set the original upage in page table to not present */
             pagedir_clear_page (owner->pagedir, upage);
 
-        
             /* Now we get a evicted frame, set it all zero, so we can
               load other file later */
             memset (evi_frame, 0, PGSIZE);
@@ -158,6 +160,7 @@ evict_frame (struct page_suppl_entry *e)
             new_ft->owner = thread_current ();
             list_push_back (&frame_table, &new_ft->elem);
 
+            lock_release (&e->pte_lock);
             lock_release (&frame_lock);
             return evi_frame;
           }

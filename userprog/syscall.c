@@ -512,6 +512,7 @@ free_mmap_entry (struct mmap_entry *mmp_e)
       spte = page_hash_find (&cur->suppl_page_table, upage);
       if (spte == NULL) 
         continue;
+      lock_acquire (&spte->pte_lock);
       /* If page is written, write back to mapped file */
       if (pagedir_is_dirty (cur->pagedir, upage))
         { 
@@ -525,6 +526,7 @@ free_mmap_entry (struct mmap_entry *mmp_e)
           pagedir_clear_page (cur->pagedir, spte->upage);
         }
       hash_delete (&cur->suppl_page_table, &spte->elem); 
+      lock_release (&spte->pte_lock);
     }
   file_close (mmp_e->file);
 }
