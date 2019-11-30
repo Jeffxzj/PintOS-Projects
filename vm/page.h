@@ -13,26 +13,27 @@ enum spte_type
   _SWAP,
   _MMAP
 };
-
 struct page_suppl_entry 
-{
-  struct file* file;
-  enum spte_type type;
+	{
+		struct file* file;       /* Store file pointer for loading */
+		enum spte_type type;     /* Type of the file */
 
-  uint8_t *upage; /* Virtual address */
+		uint8_t *upage;          /* User virtual address, unique identifier for a
+															  page, key for hash table */
+		off_t ofs; 
+		uint32_t read_bytes;     /* Bytes at UPAGE must be read from file
+          										  starting at OFS */
+		uint32_t zero_bytes;     /* Bytes at UPAGE + READ_BYTES must be zeroed. */
+		bool writable;           /* False if the page is read-only */
+		bool loaded;             /* True if the page is loaded to physical addr */
 
-  /* File information */
-  off_t ofs; 
-  uint32_t read_bytes; /* Actual data bytes */
-  uint32_t zero_bytes; /* Pagesize - read_bytes */
-  bool writable;
-  bool loaded; /* If it has been loaded */
-
-  size_t swap_idx;/* Index of swap slot */
+		size_t swap_idx;         /* Index on swap bitmap returned by swap_out() */
   
-  struct lock pte_lock;
-  struct hash_elem elem;  
-};
+    struct lock pte_lock;
+    struct hash_elem elem;  /* Hash table element */
+  };
+
+
 /* Create a supplemental page table entry providing information */
 struct page_suppl_entry *page_create_spte (struct file *file,  off_t offset, 
                                            uint8_t *upage, enum spte_type type, 

@@ -125,7 +125,7 @@ evict_frame (struct page_suppl_entry *e)
 
             /* For a dirty page, write it back */
             if (pagedir_is_dirty (cur->pagedir, evi_pte->upage) && 
-                (evi_pte ->type == _MMAP))
+                (evi_pte->type == _MMAP))
               {
                 lock_acquire (&fs_lock);
                 file_write_at (evi_pte->file,evi_pte->upage,

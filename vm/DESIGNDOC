@@ -47,7 +47,7 @@ struct page_suppl_entry
 		enum spte_type type;     /* Type of the file */
 
 		uint8_t *upage;          /* User virtual address, unique identifier for a
-															  page, useful for hash
+															  page, key for hash table */
 		off_t ofs; 
 		uint32_t read_bytes;     /* Bytes at UPAGE must be read from file
           										  starting at OFS */
@@ -57,6 +57,7 @@ struct page_suppl_entry
 
 		size_t swap_idx;         /* Index on swap bitmap returned by swap_out() */
 
+    struct lock pte_lock;    /* For pte synchronization */
 		struct hash_elem elem;   /* Hash table element */
 	};
 
@@ -251,10 +252,39 @@ one process is modifying the frame table.
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
 
+When we evict a frame, we can get the corresponding pte through ft_entry,
+so we can acquire the pte_lock in pte. Every time we modify or read the frame,
+we need to acquire the corresponding pte_lock to make sure that the process can
+not be interrupted by other processes's operation on this frame. In other word,
+a frame can only be touched by one process at one time.
+
+When P is evicting one frame, the lock is acquired, if Q is trying to modify or
+read the frame, it must acquire the lock first, but Q find that P has acquired
+the lock, so it will get to sleep until Q finishes evicting the frame.
+
+We will acquire the pte_lock when invoking the load_file or load_swap functions
+So, if P is evicting and Q tries to page back in, Q will go to sleep until P 
+finishes and then Q can get the page back.
+
+We notice that the above two conditions will greatly lower the performance. 
+Since a frame may swap in immediately after evicting. 
+
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
+
+When P is causing a page to be read from the file system or swap, as stated
+above, it will acquire the page's lock. If Q is trying to evict this page,
+Q will go to sleep until the reading process is done. After that, Q can evict
+this page.
+
+This method will definitely lower the performance but is working, since the 
+eviction can only be done after reading. However, the probability of the
+condition is actually small. 
+
+A better solution would be using pinning, but we didn't implement it because
+of the complexity.
 
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
@@ -262,7 +292,13 @@ one process is modifying the frame table.
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
 
-
+During syscalls, we will first check the validity of function arguments of esp
+before calling the syscalls functions. This check only check if the pointer is
+user address, if not we will exit(-1). While accessing user memory, we shall 
+prevent them from occurring. Take syscall_read() for example, we do not let 
+page fault happen during reading to buffer, we handle it manually before the
+page fault handler deals with it. We also ensure that all the file operations
+are atomic, since we add a fs_lock to all file operations.
 
 ---- RATIONALE ----
 
@@ -294,7 +330,7 @@ appear at the same time, which will cause low parallelism.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
-/* In 'thread.h' */
+/* Under 'thread.h' */
 /* These two new data structures added to thread are similar to the
    fd_list and file_num added to thread for project 2 */
 struct thread
@@ -319,8 +355,43 @@ struct mmap_entry
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
+When a user call the syscall mmap(), we will first validate that mapping, such
+as the validation of mapping addr. If the mapping passed the check, we will
+reopen a new file pointer and malloc() an mmap_entry to store the file pointer
+and the required information. The mmf_num of the current thread will increase,
+and the new mmap_entry will have a unique mmap_id under the current thread.
+Then we will call page_lazy_load() to create new SPT entries for this mmap file 
+and insert them to the SPT. Finally we insert the mmap_entry to mmap_list and 
+return the corresponding mmap_id if the mapping is successfully created.
+
+When a user call syscall munmap(), we will iterate the whole mmap_list and find
+the corresponding file by mmap_id and free all the related resources, like the
+created SPT entries and frames if allocated, then delete it from the mmap_list.
+Note that if the mmap file write to some pages, we will write back the content
+back to the file. 
+
+The page fault handler treats swap pages and other pages with a slight 
+difference. For both situations, the page fault handler will allocate new
+frames and install the page. However, for swap pages, the data is get from swap
+slots but for other pages(data or mmap files), data is get from files.
+
+There is no difference between swap pages and other pages when deciding which
+frame to evict. All the frames can be evicted, and the data will be swap out
+the corresponding swap slots. The spte_type of any evicted page will be changed
+to _SWAP after eviction. For mmap files, if its pages are dirty, we will write
+its data back to file. For all kinds of pages, page is uninstalled and an
+empty frame will replace the original.
+
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> another segment, either at the time the mapping is created or later.
+
+We implement this before the mapping is created, since under this situation a
+mmap() syscall should immediately fail. Since we can get the file length of the
+file we are going to map, then we can use a loop to check if the user addr 
+starting from ADDR to (ADDR + file length) is already mapped by other pages or
+there is already a page table entry occupying that address space. We use
+pagedir_get_page() and page_hash_find() to do this check. If one of the two 
+situations happens, we immediately return -1 to fail this mapping.
 
 ---- RATIONALE ----
 
@@ -330,6 +401,16 @@ struct mmap_entry
 >> that much of their implementation can be shared.  Explain why your
 >> implementation either does or does not share much of the code for
 >> the two situations.
+
+In our implementation, they do share much of the code. In SPT entry, they share
+all the member values except their spte_type is different, one is _FILE and the
+other is _MMAP. This slight difference is demanded during eviction, we need to
+write back _MMAP file content to their original files from a dirty page. For
+data demand-paged from executables, they are written to swap area and their 
+spte_type will changed to _SWAP after that. Other values they share are all 
+needed when we apply our lazy load policy by calling page_lazy_load() and 
+page_load_file(). Therefore, we share much of the code for the two situations 
+except the spte_type for the demand of frame eviction.
 
 			   SURVEY QUESTIONS
 			   ================
@@ -349,6 +430,13 @@ the quarter.
 >> Is there some particular fact or hint we should give students in
 >> future quarters to help them solve the problems?  Conversely, did you
 >> find any of our guidance to be misleading?
+
+Some questions under "PAGING TO AND FROM DISK -> synchronization" is repeated
+and some questions are hard to answer if students do not implement such design. 
+The tests of Pintos do not gives such check on synchronization. Therefore, we 
+cannot know if our meets the requirement but the questions are still there.
+So I wonder if some of the questions will be optional depends on students' 
+actual design.
 
 >> Do you have any suggestions for the TAs to more effectively assist
 >> students, either for future quarters or the remaining projects?
