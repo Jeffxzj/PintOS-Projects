@@ -30,22 +30,32 @@ https://github.com/codyjack/OS-pintos
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+/* Supplementary page table entry type determined by the file type in it. */
+enum spte_type 
+{
+  _FILE,    /* Normal file type, no mmap or swapping */
+  _SWAP,    /* The file is already stored on swap area because of eviction */
+  _MMAP     /* If the file is memory mapped, set spte to this type */
+};
+
+/* Supplementary page table entry for hash table storing it */
 struct page_suppl_entry 
 	{
-		struct file* file;
-		enum spte_type type;
+		struct file* file;       /* Store file pointer for loading */
+		enum spte_type type;     /* Type of the file */
 
-		uint8_t *upage;
-
+		uint8_t *upage;          /* User virtual address, unique identifier for a
+															  page, useful for hash
 		off_t ofs; 
-		uint32_t read_bytes; 
-		uint32_t zero_bytes; 
-		bool writable;
-		bool loaded;
+		uint32_t read_bytes;     /* Bytes at UPAGE must be read from file
+          										  starting at OFS */
+		uint32_t zero_bytes;     /* Bytes at UPAGE + READ_BYTES must be zeroed. */
+		bool writable;           /* False if the page is read-only */
+		bool loaded;             /* True if the page is loaded to physical addr */
 
-		size_t swap_idx;
+		size_t swap_idx;         /* Index on swap bitmap returned by swap_out() */
 
-		struct hash_elem elem;  
+		struct hash_elem elem;   /* Hash table element */
 	};
 
 ---- ALGORITHMS ----
@@ -68,6 +78,25 @@ Using frame_lock to ensure mutual exclusion when adding new frames.
 >> A5: Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
 
+We need a frame table to record all pages mapped on physical memory since we 
+need eviction on this project, so we would like to decide which frame to evict.
+We also need a supplementary page table, since we apply lazy loading policy on
+this project, and we let the page fault handler to allocate frames, so we shall
+record all the related information for a page when loading to physical memory.
+
+We use a linked list for frame table, since when dealing with physical address,
+we often need to insert (allocate frame) or delete (eviction) a frame, these
+operations take O(1) time on a linked list. However, finding a frame needs O(n)
+time for a linked list, but we only need to iterate over the whole list when 
+performing eviction and free operations, these won't happen a lot.
+
+We use a hash table to store all supplementary table entries with the user 
+virtual address as the key. Since we need to find a supplementary table entry
+in the table when page fault happens, and page fault happens all the time in 
+this project since we apply the lazy load policy, so we need a fast way to find
+an entry from the table. Therefore, we use hash table which need only O(1) time
+on average to extract a specific element.
+
 		       PAGING TO AND FROM DISK
 		       =======================
 
@@ -88,9 +117,11 @@ struct ft_entry
 		struct list_elem elem;
 	};
 
-struct block *swap_block;
-struct bitmap *swap_map;
-struct lock swap_lock;
+struct block *swap_block;  /* The block disk for swapping space */
+
+struct bitmap *swap_map;   /* Bitmap to indicate a swap slot is used or not */
+															
+struct lock swap_lock;     /* Lock to protect the operations on swap_map */
 
 ---- ALGORITHMS ----
 
@@ -146,19 +177,23 @@ struct lock swap_lock;
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+/* In 'thread.h' */
+/* These two new data structures added to thread are similar to the
+   fd_list and file_num added to thread for project 2 */
 struct thread
 	{
-		struct list mmap_list;              /* List of memory mapped files. */
-		mapid_t mmf_num;
+		//....
+		struct list mmap_list; /* List for all memory mapped files in a thread */
+		mapid_t mmf_num;			 /* Unique number to identify each mapped file */
 	}
 
 struct mmap_entry
   {
-    mapid_t mmap_id;
-    void *uvaddr;
-    struct file *file;
-    unsigned int page_num;
-    struct list_elem elem;
+    mapid_t mmap_id;       /* Unique number to identify a mapped file */
+    void *uvaddr;					 /* Unique user virtual address for first page */
+    struct file *file;     /* File pointer */
+    unsigned int page_num; /* Number of pages the mmap file will have */
+    struct list_elem elem; /* List element for mmap_list */
   };
 
 ---- ALGORITHMS ----
