@@ -159,6 +159,13 @@ struct lock swap_lock;     /* Lock to protect the operations on swap_map */
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
 
+During syscalls, we will first check the validity of function arguments of esp
+before calling the syscalls functions. This check only check if the pointer is
+user address, if not we will exit(-1). While accessing user memory, we shall 
+prevent them from occurring. Take syscall_read() for example, we do not let 
+page fault happen during reading to buffer, we handle it manually before the
+page fault handler deals with it. We also ensure that all the file operations
+are atomic, since we add a fs_lock to all file operations. 
 ---- RATIONALE ----
 
 >> B9: A single lock for the whole VM system would make
@@ -278,10 +285,12 @@ the quarter.
 >> future quarters to help them solve the problems?  Conversely, did you
 >> find any of our guidance to be misleading?
 
-Some questions under "PAGING TO AND FROM DISK"->"synchronization" is repeated
+Some questions under "PAGING TO AND FROM DISK -> synchronization" is repeated
 and some questions are hard to answer if students do not implement such design. 
-The tests of Pintos do not gives such check on synchronization. So I wonder if
-some of the questions will be optional depends on students' actual design.
+The tests of Pintos do not gives such check on synchronization. Therefore, we 
+cannot know if our meets the requirement but the questions are still there.
+So I wonder if some of the questions will be optional depends on students' 
+actual design.
 
 >> Do you have any suggestions for the TAs to more effectively assist
 >> students, either for future quarters or the remaining projects?
