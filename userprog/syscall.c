@@ -30,6 +30,13 @@ static void syscall_seek (int fd, unsigned position);
 static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
 
+/*Syscall functions for project 4. */
+static bool syscall_chdir (const char *dir);
+static bool syscall_mkdir (const char *dir);
+static bool syscall_readdir (int fd, char *name);
+static bool syscall_isdir (int fd);
+static int syscall_inumber (int fd);
+
 /* Helper functions */
 static bool check_valid_pointer (void *ptr, uint8_t argc);
 static bool check_valid_string (char *str);
