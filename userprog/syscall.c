@@ -34,6 +34,13 @@ static void syscall_close (int fd);
 static mapid_t syscall_mmap (int fd, void *addr);
 static void syscall_munmap (mapid_t mapping);
 
+/* Syscall functions for Project 4 */
+static bool chdir (const char *dir);
+static bool mkdir (const char *dir);
+static bool readdir (int fd, char *name);
+static bool isdir (int fd);
+static int inumber (int fd);
+
 /* Helper functions */
 static void free_mmap_entry (struct mmap_entry *mmp_e);
 static void check_read_buffer (void *buffer, unsigned size);
