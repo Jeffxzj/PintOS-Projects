@@ -634,3 +634,4 @@ find_opened_file (struct thread *t, int fd)
     }
   return NULL;
 }
+
