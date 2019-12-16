@@ -6,19 +6,36 @@
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
+#define DIRECT_BLOCK_NUM 123
+#define INDIRECT_BLOCK_NUM 128
+#define DB_INDIRECT_BLOCK_NUM 16384  // 128 * 128
+
+const static char ZEROS[BLOCK_SECTOR_SIZE];
 
 /* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+   Must be exactly BLOCK_SECTOR_SIZE bytes long. 
+   1 indirect block and 1 double indirect block. */
 struct inode_disk
   {
-    block_sector_t start;               /* First data sector. */
+    //block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
+    //uint32_t unused[125];               /* Not used. */
+    
+    bool is_dir;
+    //block_sector_t direct_idx;
+    block_sector_t indirect_idx;
+    block_sector_t db_indirect_idx;
+    block_sector_t direct_blocks[DIRECT_BLOCK_NUM];
   };
+
+static bool alloc_block_space (size_t sectors, struct inode_disk *disk_inode);
+static bool extend_block_level(size_t sectors, struct inode_disk *disk_inode);
 
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
@@ -37,6 +54,8 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
+
+    struct lock extend_lock;            /* Lock to protect inode extension */
   };
 
 /* Returns the block device sector that contains byte offset POS
@@ -82,6 +101,18 @@ inode_create (block_sector_t sector, off_t length)
   ASSERT (sizeof *disk_inode == BLOCK_SECTOR_SIZE);
 
   disk_inode = calloc (1, sizeof *disk_inode);
+  if (disk_inode == NULL)
+    return success;
+  
+  size_t sectors = bytes_to_sectors (length);
+  disk_inode->length = length;
+  disk_inode->magic = INODE_MAGIC;
+  if (extend_block_level(sectors, disk_inode))
+  {
+    block_write (fs_device, sector, disk_inode);
+  }
+  
+  /*
   if (disk_inode != NULL)
     {
       size_t sectors = bytes_to_sectors (length);
@@ -102,6 +133,7 @@ inode_create (block_sector_t sector, off_t length)
         } 
       free (disk_inode);
     }
+  */
   return success;
 }
 
@@ -342,4 +374,88 @@ off_t
 inode_length (const struct inode *inode)
 {
   return inode->data.length;
+}
+
+static bool 
+alloc_block_space (size_t sectors, struct inode_disk *disk_inode)
+{
+  bool success = false;
+  size_t total_sectors = sectors;
+  size_t level_sectors = MIN (total_sectors, DIRECT_BLOCK_NUM);
+  success = extend_inode_level (level_sectors, disk_inode, 1);
+  if (!success || total_sectors <= DIRECT_BLOCK_NUM)
+    return success;
+  
+  total_sectors -= DIRECT_BLOCK_NUM;
+  level_sectors = MIN (total_sectors, INDIRECT_BLOCK_NUM);
+  success = extend_inode_level (level_sectors, disk_inode, 2);
+  if (!success || total_sectors <= INDIRECT_BLOCK_NUM)
+    return success;
+
+  total_sectors -= INDIRECT_BLOCK_NUM;
+  level_sectors = MIN (total_sectors, DB_INDIRECT_BLOCK_NUM);
+  success = extend_inode_level (level_sectors, disk_inode, 3);
+  if (!success || total_sectors <= DB_INDIRECT_BLOCK_NUM)
+    return success;
+
+  printf("block allocation failed, space requested too large\n");
+  return success;
+}
+
+static bool
+extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
+{
+  size_t total_sectors = sectors;
+  switch (level)
+    {
+    /* Allocate direct blocks */
+    case 1:
+      {
+        for (size_t i = 0; i < sectors; i++)
+          {
+            if (disk_inode->direct_blocks[i] != 0)
+              continue;
+            if (!free_map_allocate (1, &disk_inode->direct_blocks[i]))
+              return false;
+            block_write (fs_device, disk_inode->direct_blocks[i], ZEROS);
+          }
+      }
+    case 2:
+      {
+        block_sector_t indirect_blocks[INDIRECT_BLOCK_NUM];
+        /* If the it is the first time to extend level 2 block. */
+        if (disk_inode->indirect_idx == 0)
+          {
+            if (free_map_allocate (1, &disk_inode->indirect_idx))
+              return false;
+          }
+        else
+          block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);        
+        for (size_t i = 0; i < INDIRECT_BLOCK_NUM; i++)
+          {
+            if (total_sectors <= 0)
+              break;
+            if (indirect_blocks[i] != 0)
+              continue;
+            if (!free_map_allocate (1, &indirect_blocks[i]))
+              return false;
+            block_write (fs_device, indirect_blocks[i], ZEROS);
+            total_sectors--;
+          }
+        block_write (fs_device, disk_inode->indirect_idx, indirect_blocks);
+      }
+    case 3:
+      {
+        if (disk_inode->db_indirect_idx == 0)
+          {
+            if (!free_map_allocate (1, &disk_inode->db_indrect_idx))
+              return false;
+          }
+        else
+          block_write (fs_device, disk_inode->indirect_idx, ZEROS);  
+      }
+    default:
+      break;
+    }
+  return true;
 }
