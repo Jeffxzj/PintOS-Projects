@@ -13,6 +13,7 @@
 #include "lib/user/syscall.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -48,6 +49,9 @@ static struct lock fs_lock;
 /* Constants to check bound of syscall code */
 static const int SYSCODE_MIN = 0;
 static const int SYSCODE_MAX = 19;
+
+struct inode;
+struct file;
 
 void
 syscall_init (void) 
@@ -164,6 +168,38 @@ syscall_handler (struct intr_frame *f)
         syscall_close (fd);
         break;
       }
+    /* Syscalls for Project 4 */
+    case SYS_CHDIR:
+      {
+        char *dir = (char *)*(esp + 1);
+        f->eax = (uint32_t) syscall_chdir (dir);
+        break;
+      }
+    case SYS_MKDIR:
+      {
+        char *dir = (char *)*(esp + 1);
+        f->eax = (uint32_t) syscall_mkdir (dir);
+        break;
+      }
+    case SYS_READDIR:
+      {
+        int fd = *(esp + 1);
+        char *name = (char *)*(esp + 2);
+        f->eax = (uint32_t) syscall_readdir (fd, name);
+        break;
+      }
+    case SYS_ISDIR:
+      {
+        int fd = *(esp + 1);
+        f->eax = (uint32_t) syscall_isdir (fd);
+        break;
+      }
+    case SYS_INUMBER:
+      {
+        int fd = *(esp + 1);
+        f->eax = (uint32_t) syscall_inumber (fd);
+        break;
+      }       
     default:
       break;
     }
@@ -408,6 +444,40 @@ syscall_close (int fd)
   lock_release (&fs_lock);
 }
 
+static bool 
+syscall_chdir (const char *dir) 
+{
+  return false;
+}
+
+static bool syscall_mkdir (const char *dir)
+{
+  return false;
+}
+
+static bool syscall_readdir (int fd, char *name)
+{
+  return false;
+}
+
+static bool syscall_isdir (int fd)
+{
+  struct file_descriptor *fd_struct = find_opened_file (thread_current(), fd);
+  if (fd_struct != NULL)
+    return false;
+  return inode_isdir (file_get_inode (fd_struct->file));
+}
+
+static int syscall_inumber (int fd)
+{ 
+  int inumber = -1;
+  struct file_descriptor *fd_struct = find_opened_file (thread_current(), fd);
+  lock_acquire (&fs_lock);
+  if (fd_struct != NULL)
+    inumber = inode_get_inumber (file_get_inode (fd_struct->file));
+  lock_release (&fs_lock);
+  return inumber;
+}
 /* Helper functions */
 static bool
 check_valid_pointer (void *ptr, uint8_t argc)

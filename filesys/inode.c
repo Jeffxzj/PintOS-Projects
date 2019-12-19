@@ -9,12 +9,13 @@
 #include "threads/malloc.h"
 #include "threads/synch.h"
 
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 #define DIRECT_BLOCK_NUM 123
 #define INDIRECT_BLOCK_NUM 128
 #define DB_INDIRECT_BLOCK_NUM 16384  // 128 * 128
+
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 
 static const char ZEROS[BLOCK_SECTOR_SIZE];
 
@@ -420,6 +421,12 @@ off_t
 inode_length (const struct inode *inode)
 {
   return inode->data.length;
+}
+
+bool
+inode_isdir (const struct inode *inode)
+{
+  return inode->data.is_dir;
 }
 
 static bool 
