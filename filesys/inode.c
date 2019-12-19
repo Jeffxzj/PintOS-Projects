@@ -8,6 +8,7 @@
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
+#include "cache.h"
 
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 /* Identifies an inode. */
@@ -81,7 +82,8 @@ byte_to_sector (const struct inode *inode, off_t pos)
       sector_idx -= DIRECT_BLOCK_NUM;
       if (sector_idx < INDIRECT_BLOCK_NUM)
         {
-          block_read (fs_device, disk_inode->indirect_idx, indirect_blocks);
+          cache_read (disk_inode->indirect_idx, indirect_blocks);
+          //block_read (fs_device, disk_inode->indirect_idx, indirect_blocks);
           return indirect_blocks[sector_idx];
         }
       
@@ -90,8 +92,10 @@ byte_to_sector (const struct inode *inode, off_t pos)
         {
           int l2 = sector_idx / INDIRECT_BLOCK_NUM;
           int l3 = sector_idx % INDIRECT_BLOCK_NUM;
-          block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
-          block_read (fs_device, indirect_blocks[l2], db_indirect_blocks);
+          cache_read (disk_inode->db_indirect_idx, indirect_blocks);
+          cache_read (indirect_blocks[l2], db_indirect_blocks);
+          //block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
+          //block_read (fs_device, indirect_blocks[l2], db_indirect_blocks);
           return db_indirect_blocks[l3];
         }
       sector_idx -= DB_INDIRECT_BLOCK_NUM;
@@ -125,7 +129,7 @@ inode_create (block_sector_t sector, off_t length)
   bool success = false;
 
   ASSERT (length >= 0);
-
+  
   /* If this assertion fails, the inode structure is not exactly
      one sector in size, and you should fix that. */
   ASSERT (sizeof *disk_inode == BLOCK_SECTOR_SIZE);
@@ -139,7 +143,8 @@ inode_create (block_sector_t sector, off_t length)
   disk_inode->magic = INODE_MAGIC;
   if (alloc_block_space (sectors, disk_inode))
   {
-    block_write (fs_device, sector, disk_inode);
+    //block_write (fs_device, sector, disk_inode);
+    cache_write (sector, disk_inode);
     //disk_inode->length = length;
     success = true;
   }
@@ -201,7 +206,8 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-  block_read (fs_device, inode->sector, &inode->data);
+  cache_read (inode->sector, &inode->data);
+  //block_read (fs_device, inode->sector, &inode->data);
   return inode;
 }
 
@@ -291,7 +297,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           /* Read full sector directly into caller's buffer. */
-          block_read (fs_device, sector_idx, buffer + bytes_read);
+          //block_read (fs_device, sector_idx, buffer + bytes_read);
+          cache_read (sector_idx, buffer + bytes_read);
         }
       else 
         {
@@ -303,7 +310,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
               if (bounce == NULL)
                 break;
             }
-          block_read (fs_device, sector_idx, bounce);
+          //block_read (fs_device, sector_idx, bounce);
+          cache_read (sector_idx, bounce);
           memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
         }
       
@@ -341,7 +349,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       if (!alloc_block_space (sectors, disk_inode))
         return 0;
       disk_inode->length = offset + size;
-      block_write (fs_device, inode->sector, disk_inode);
+      //block_write (fs_device, inode->sector, disk_inode);
+      cache_write (inode->sector, disk_inode);
     }
   while (size > 0) 
     {
@@ -362,7 +371,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           /* Write full sector directly to disk. */
-          block_write (fs_device, sector_idx, buffer + bytes_written);
+          //block_write (fs_device, sector_idx, buffer + bytes_written);
+          cache_write (sector_idx, buffer + bytes_written);
         }
       else 
         {
@@ -378,11 +388,13 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
              we're writing, then we need to read in the sector
              first.  Otherwise we start with a sector of all zeros. */
           if (sector_ofs > 0 || chunk_size < sector_left) 
-            block_read (fs_device, sector_idx, bounce);
+            //block_read (fs_device, sector_idx, bounce);
+            cache_read (sector_idx, bounce);
           else
             memset (bounce, 0, BLOCK_SECTOR_SIZE);
           memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-          block_write (fs_device, sector_idx, bounce);
+          //block_write (fs_device, sector_idx, bounce);
+          cache_write (sector_idx, bounce);
         }
 
       /* Advance. */
@@ -468,7 +480,8 @@ extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
               continue;
             if (!free_map_allocate (1, &disk_inode->direct_blocks[i]))
               return false;
-            block_write (fs_device, disk_inode->direct_blocks[i], ZEROS);
+            //block_write (fs_device, disk_inode->direct_blocks[i], ZEROS);
+            cache_write (disk_inode->direct_blocks[i], ZEROS);
             total_sectors--;
           }
         break;
@@ -481,9 +494,11 @@ extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
           {
             if (!free_map_allocate (1, &disk_inode->indirect_idx))
               return false;
-            block_write (fs_device, disk_inode->indirect_idx, ZEROS);
+            //block_write (fs_device, disk_inode->indirect_idx, ZEROS);
+            cache_write (disk_inode->indirect_idx, ZEROS);
           }
-        block_read (fs_device, disk_inode->indirect_idx, indirect_blocks);        
+        //block_read (fs_device, disk_inode->indirect_idx, indirect_blocks);
+        cache_read (disk_inode->indirect_idx, indirect_blocks);        
         
         for (size_t i = 0; i < INDIRECT_BLOCK_NUM; i++)
           {
@@ -493,10 +508,12 @@ extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
               continue;
             if (!free_map_allocate (1, &indirect_blocks[i]))
               return false;
-            block_write (fs_device, indirect_blocks[i], ZEROS);
+            //block_write (fs_device, indirect_blocks[i], ZEROS);
+            cache_write (indirect_blocks[i], ZEROS);
             total_sectors--;
           }
-        block_write (fs_device, disk_inode->indirect_idx, indirect_blocks);
+        //block_write (fs_device, disk_inode->indirect_idx, indirect_blocks);
+        cache_write (disk_inode->indirect_idx, indirect_blocks);
         break;
       }
     case 3:
@@ -507,9 +524,11 @@ extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
           {
             if (!free_map_allocate (1, &disk_inode->db_indirect_idx))
               return false;
-            block_write (fs_device, disk_inode->db_indirect_idx, ZEROS);
+            //block_write (fs_device, disk_inode->db_indirect_idx, ZEROS);
+            cache_write (disk_inode->db_indirect_idx, ZEROS);
           }
-        block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
+        //block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
+        cache_read (disk_inode->db_indirect_idx, indirect_blocks);
         for (size_t i = 0; i < INDIRECT_BLOCK_NUM; i++)
           {
             if (total_sectors == 0)
@@ -518,9 +537,11 @@ extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
               {
                 if (!free_map_allocate (1, &indirect_blocks[i]))
                   return false;
-                block_write (fs_device, indirect_blocks[i], ZEROS);
+                //block_write (fs_device, indirect_blocks[i], ZEROS);
+                cache_write (indirect_blocks[i], ZEROS);
               }
-            block_read (fs_device, indirect_blocks[i], db_indirect_blocks);
+            //block_read (fs_device, indirect_blocks[i], db_indirect_blocks);
+            cache_read (indirect_blocks[i], db_indirect_blocks);
             for (size_t j = 0; j < INDIRECT_BLOCK_NUM; j++)
               {
                 if (total_sectors == 0)
@@ -529,13 +550,16 @@ extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
                   {
                     if (!free_map_allocate (1, &db_indirect_blocks[i]))
                       return false;
-                    block_write (fs_device, db_indirect_blocks[i], ZEROS);
+                    //block_write (fs_device, db_indirect_blocks[i], ZEROS);
+                    cache_write (db_indirect_blocks[i], ZEROS);
                     total_sectors--;
                   }
               }
-            block_write (fs_device, indirect_blocks[i], db_indirect_blocks);
+            //block_write (fs_device, indirect_blocks[i], db_indirect_blocks);
+            cache_write (indirect_blocks[i], db_indirect_blocks);
           }
-        block_write (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
+        //block_write (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
+        cache_write (disk_inode->db_indirect_idx, indirect_blocks);
         break;
       }
     default:
@@ -558,7 +582,8 @@ free_all_levels (const struct inode *inode)
   block_sector_t indirect_blocks[INDIRECT_BLOCK_NUM];
   total_sectors -= DIRECT_BLOCK_NUM;
   level_sectors = MIN (total_sectors, INDIRECT_BLOCK_NUM);
-  block_read (fs_device, disk_inode->indirect_idx, indirect_blocks);
+  //block_read (fs_device, disk_inode->indirect_idx, indirect_blocks);
+  cache_read (disk_inode->indirect_idx, indirect_blocks);
   for (size_t i = 0; i < level_sectors; i++)
     free_map_release (indirect_blocks[i], 1);
   if (total_sectors <= INDIRECT_BLOCK_NUM)
@@ -567,12 +592,14 @@ free_all_levels (const struct inode *inode)
   block_sector_t db_indirect_blocks[INDIRECT_BLOCK_NUM];
   total_sectors -= INDIRECT_BLOCK_NUM;
   level_sectors = MIN (total_sectors, DB_INDIRECT_BLOCK_NUM);
-  block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
+  //block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
+  cache_read (disk_inode->db_indirect_idx, indirect_blocks);
   for (size_t i = 0; i < INDIRECT_BLOCK_NUM; i++)
     {
       if (indirect_blocks[i] == 0)
         break;
-      block_read (fs_device, indirect_blocks[i], db_indirect_blocks);
+      //block_read (fs_device, indirect_blocks[i], db_indirect_blocks);
+      cache_read (indirect_blocks[i], db_indirect_blocks);
       for (size_t j = 0; j < INDIRECT_BLOCK_NUM; j++)
         {
           if (db_indirect_blocks[j] == 0)
