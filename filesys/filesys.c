@@ -8,6 +8,7 @@
 #include "filesys/directory.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
+#include "cache.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -28,6 +29,7 @@ filesys_init (bool format)
     PANIC ("No file system device found, can't initialize file system.");
 
   inode_init ();
+  cache_init ();
   free_map_init ();
 
   if (format) 
@@ -42,6 +44,7 @@ void
 filesys_done (void) 
 {
   free_map_close ();
+  flush_cache();
 }
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
