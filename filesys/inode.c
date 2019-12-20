@@ -120,7 +120,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -138,6 +138,7 @@ inode_create (block_sector_t sector, off_t length)
   size_t sectors = bytes_to_sectors (length);
   disk_inode->length = length;
   disk_inode->magic = INODE_MAGIC;
+  disk_inode->is_dir = is_dir;
   if (alloc_block_space (sectors, disk_inode))
   {
     block_write (fs_device, sector, disk_inode);
@@ -243,7 +244,6 @@ inode_close (struct inode *inode)
         {
           free_map_release (inode->sector, 1);
           free_all_levels (inode);
-          //free_inode (inode);
           /*
           free_map_release (inode->data.start,
                             bytes_to_sectors (inode->data.length)); 
@@ -389,6 +389,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       /* Advance. */
       size -= chunk_size;
       offset += chunk_size;
+
       bytes_written += chunk_size;
     }
   free (bounce);

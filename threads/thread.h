@@ -96,7 +96,10 @@ struct thread
     struct list_elem elem;              /* List element. */
 
     /* For Alarm Clock */
-    int64_t waking_time;                /* Time the thread should wake */
+    int64_t waking_time;                /* Time the thread should wake. */
+
+    /* For subdirectories */
+    struct dir *cur_dir;                /* Current directory. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

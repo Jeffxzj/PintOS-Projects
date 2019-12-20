@@ -71,6 +71,8 @@ process_execute (const char *file_name)
       /* Owned by wait: Initialize child_info struct */
       struct thread* t = get_thread_by_tid(tid);
       t->parent_tid = thread_current ()->tid;
+      /* Child process inherits parent's current directory */
+      t->cur_dir = thread_current ()->cur_dir;
       struct child_info *child = malloc (sizeof (struct child_info));
       if (child != NULL)
         { 
@@ -109,7 +111,7 @@ start_process (void *file_name_)
   success = load (exe_name, &if_.eip, &if_.esp);
 
   /* Owned by child status */
-  struct thread * parent = get_thread_by_tid (cur->parent_tid);
+  struct thread *parent = get_thread_by_tid (cur->parent_tid);
   if (success) 
     parent->child_load = 1;
   else 
@@ -165,7 +167,7 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success){
-    cur -> exit_code = -1;   /* If loading fails, exit status should be -1 */
+    cur->exit_code = -1;   /* If loading fails, exit status should be -1 */
     thread_exit ();
   }
     
