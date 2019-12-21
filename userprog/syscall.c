@@ -14,6 +14,7 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
+#include "filesys/directory.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -283,7 +284,7 @@ syscall_create (const char *file, unsigned initial_size)
 {
   bool status = false;
   lock_acquire (&fs_lock);
-  status = filesys_create (file, initial_size);
+  status = filesys_create (file, initial_size, false);
   lock_release (&fs_lock);
   return status;
 }
@@ -447,23 +448,34 @@ syscall_close (int fd)
 static bool 
 syscall_chdir (const char *dir) 
 {
-  return false;
+  lock_acquire (&fs_lock);
+  bool success = filesys_chdir (dir);
+  lock_release (&fs_lock);
+  return success;
 }
 
-static bool syscall_mkdir (const char *dir)
+static bool 
+syscall_mkdir (const char *dir)
 {
-  return false;
+  lock_acquire (&fs_lock);
+  bool success = filesys_create (dir, 0, true);
+  lock_release (&fs_lock);
+  return success;
 }
 
 static bool syscall_readdir (int fd, char *name)
 {
-  return false;
+  struct file_descriptor *fd_struct = find_opened_file (thread_current(), fd);
+  if (fd_struct == NULL)
+    return false;
+  bool success = filesys_readdir (name, fd_struct->file);
+  return success;
 }
 
 static bool syscall_isdir (int fd)
 {
   struct file_descriptor *fd_struct = find_opened_file (thread_current(), fd);
-  if (fd_struct != NULL)
+  if (fd_struct == NULL)
     return false;
   return inode_isdir (file_get_inode (fd_struct->file));
 }

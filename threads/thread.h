@@ -153,6 +153,7 @@ extern bool thread_mlfqs;
 
 void thread_init (void);
 void thread_start (void);
+void thread_init_curdir (void);
 
 void thread_tick (void);
 void thread_print_stats (void);

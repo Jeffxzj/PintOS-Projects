@@ -72,7 +72,10 @@ process_execute (const char *file_name)
       struct thread* t = get_thread_by_tid(tid);
       t->parent_tid = thread_current ()->tid;
       /* Child process inherits parent's current directory */
-      t->cur_dir = thread_current ()->cur_dir;
+      if (thread_current ()->cur_dir != NULL)
+        t->cur_dir = dir_open_cur ();
+      else
+        t->cur_dir = NULL;
       struct child_info *child = malloc (sizeof (struct child_info));
       if (child != NULL)
         { 
@@ -170,8 +173,9 @@ start_process (void *file_name_)
     cur->exit_code = -1;   /* If loading fails, exit status should be -1 */
     thread_exit ();
   }
-    
   
+  if (cur->cur_dir == NULL)
+    cur->cur_dir = dir_open_root ();
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -233,6 +237,8 @@ process_exit (void)
   if (cur->exe_file != NULL)
     file_allow_write (cur->exe_file);
 
+  if (cur->cur_dir)
+    dir_close (cur->cur_dir);
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
