@@ -532,7 +532,7 @@ extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
           {
             if (!free_map_allocate (1, &disk_inode->db_indirect_idx))
               return false;
-            //block_write (fs_device, disk_inode->db_indirect_idx, ZEROS);
+            block_write (fs_device, disk_inode->db_indirect_idx, ZEROS);
             cache_write (disk_inode->db_indirect_idx, ZEROS);
           }
         //block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);

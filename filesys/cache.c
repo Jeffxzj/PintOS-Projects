@@ -123,7 +123,7 @@ void cache_read (block_sector_t sector_idx, void *buffer)
     lock_release (&cur->cache_lock); 
 }
 
-void cache_write (block_sector_t sector_idx, void *buffer)
+void cache_write (block_sector_t sector_idx, const void *buffer)
 {
   struct cache_ele* cur = cache_find (sector_idx);
   /* If not found, get a new entry */

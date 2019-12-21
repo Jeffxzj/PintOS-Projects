@@ -19,6 +19,7 @@ Runze Yuan <yuanrz@shanghaitech.edu.cn>
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
+CSCI 350: Pintos Guide Written by: Stephen Tsung-Han Sher
 
 		     INDEXED AND EXTENSIBLE FILES
 		     ============================

@@ -52,19 +52,30 @@ filesys_done (void)
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
 bool
-filesys_create (const char *pathname, off_t initial_size) 
+filesys_create (const char *name, off_t initial_size, bool is_dir)
 {
   block_sector_t inode_sector = 0;
-  //char *filename = get_filename (pathname);
-  struct dir *dir = dir_open_root ();
-  //struct dir *dir = get_directory (pathname);
+  char *filename = get_filename (name);
+  struct dir *dir = get_directory (name);
+  //printf("%s wocaonima\n",filename);
+  //printf("%d", dir==NULL);
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size, false)
-                  && dir_add (dir, pathname, inode_sector));
+                  && inode_create (inode_sector, initial_size, is_dir)
+                  && dir_add (dir, filename, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
+  /* If creation type is a directory */
+  if (is_dir && success)
+    {
+      struct dir *new_dir = dir_open (inode_open (inode_sector));
+      block_sector_t parent_sector = inode_get_inumber (dir_get_inode (dir));
+      dir_add(new_dir, ".", inode_sector);
+      dir_add(new_dir, "..", parent_sector);
+      dir_close (new_dir);
+    }
   dir_close (dir);
+  free (filename);
 
   return success;
 }
@@ -75,15 +86,16 @@ filesys_create (const char *pathname, off_t initial_size)
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file *
-filesys_open (const char *pathname)
+filesys_open (const char *name)
 {
-  struct dir *dir = dir_open_root ();
+  char *filename = get_filename (name);
+  struct dir *dir = get_directory (name);
   struct inode *inode = NULL;
 
   if (dir != NULL)
-    dir_lookup (dir, pathname, &inode);
+    dir_lookup (dir, filename, &inode);
   dir_close (dir);
-
+  free (filename);
   return file_open (inode);
 }
 
@@ -92,14 +104,46 @@ filesys_open (const char *pathname)
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool
-filesys_remove (const char *pathname) 
+filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, pathname);
+  char *filename = get_filename (name);
+  struct dir *dir = get_directory (name);
+  bool success = dir != NULL && dir_remove (dir, name);
   dir_close (dir); 
-
+  free (filename);
   return success;
 }
+
+/* Change the current working directory of the process to dir, which may be 
+   relative or absolute. Returns true if successful, false on failure. */
+bool filesys_chdir (const char *name)
+{
+  struct thread *cur = thread_current ();
+  char *dirname = get_filename (name);
+  struct dir *dir = get_directory (name);
+  
+  struct inode *inode = NULL;
+  bool success = (dir_lookup (dir, dirname, &inode)
+                  && inode_isdir (inode));
+  if (success)
+    cur->cur_dir = dir_open (inode);
+  dir_close (dir);  
+  free (dirname);
+  return success;
+}
+
+bool 
+filesys_readdir (char *name, struct file *file)
+{
+  bool success = false;
+  struct inode *inode = file_get_inode (file);
+  if (!inode_isdir (inode))
+    return success;
+  struct dir *dir = dir_open (inode);
+  success = dir_readdir (dir, name);
+  return success; 
+}
+
 
 /* Formats the file system. */
 static void
@@ -109,10 +153,15 @@ do_format (void)
   free_map_create ();
   if (!dir_create (ROOT_DIR_SECTOR, 16))
     PANIC ("root directory creation failed");
+  struct dir *root = dir_open_root ();
+  dir_add (root, ".", ROOT_DIR_SECTOR);
+  dir_add (root, "..", ROOT_DIR_SECTOR);
+  dir_close (root);
   free_map_close ();
   printf ("done.\n");
 }
 
+/*--------------------------- Parser functions ------------------------------*/
 static char *
 get_filename (const char *pathname)
 {
@@ -122,35 +171,56 @@ get_filename (const char *pathname)
   /* Standard usage of strtok(). 
      Save the last token which represents the filename. */    
   char *token, *save_ptr;
-  char *file_token = NULL;
+  char *file_token = ""; /* Empty filename if nothing to tokenize */
   for (token = strtok_r (s, "/", &save_ptr); token != NULL;
        token = strtok_r (NULL, "/", &save_ptr))
     file_token = token;
-  char *filename = malloc (strlen (file_token) + 1);
+  char *filename = malloc (strlen (file_token) + 1); /* Remember to free it */
+  if (filename == NULL)
+    return NULL;
   strlcpy (filename, file_token, strlen (file_token) + 1);
   return filename;
 }
 
-/*
 static struct dir *
 get_directory (const char *pathname)
 {
+
   size_t path_size = strlen (pathname) + 1;
   char s[path_size];
   strlcpy (s, pathname, path_size);
   struct dir *dir = NULL;
-  bool is_absolute = s[0] == '/';
-  if (is_absolute)
-    dir = dir_reopen(thread_current()->cur_dir);
+  struct thread *cur = thread_current ();
 
+  bool is_absolute = (s[0] == '/');
+  if (is_absolute || !cur->cur_dir){
+    //printf("root\n");
+    dir = dir_open_root ();
+    if (strcmp (s, "/") == 0)
+      return dir;
+    //printf("%d", dir==NULL); 
+  }
+  else
+    dir = dir_open_cur ();
   char *token, *save_ptr;
-  char *file_token = NULL;
-  for (token = strtok_r (s, "/", &save_ptr); token != NULL;
+  /* Extract the first token to ensure that file name will not be looked up
+     if it is firstly created. */
+  char *prev_token = strtok_r (s, "/", &save_ptr);
+  for (token = strtok_r (NULL, "/", &save_ptr); token != NULL;
        token = strtok_r (NULL, "/", &save_ptr))
     {
-      if (strcmp (token, "..") == 0)
+      struct inode *inode = NULL;
+      if (dir_lookup (dir, prev_token, &inode) == false)
         {
+          dir_close (dir);
+          return NULL;
         }
+      prev_token = token;
+      /* Continue if inode is a file type */
+      if (inode_isdir (inode) == false)
+        continue;
+      dir_close (dir);
+      dir = dir_open (inode);
     }
+  return dir;
 }
-*/
