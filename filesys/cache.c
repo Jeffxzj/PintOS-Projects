@@ -123,7 +123,7 @@ void cache_read (block_sector_t sector_idx, void *buffer)
     lock_release (&cur->cache_lock); 
 }
 
-void cache_write (block_sector_t sector_idx, void *buffer)
+void cache_write (block_sector_t sector_idx, const void *buffer)
 {
   struct cache_ele* cur = cache_find (sector_idx);
   /* If not found, get a new entry */
@@ -170,7 +170,7 @@ void cache_read_ahead (block_sector_t sector_idx)
 {
   block_sector_t *next_sector = malloc (sizeof (block_sector_t));
   *next_sector = sector_idx + 1;
-  thread_create ("read_ahead", PRI_DEFAULT, read_ahead_func, next_sector);
+  thread_create ("1", PRI_DEFAULT, read_ahead_func, next_sector);
 }
 
 void read_ahead_func (void *next_sector)

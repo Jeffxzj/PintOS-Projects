@@ -20,6 +20,6 @@ struct cache_ele cache_array[cache_size];
 void cache_init(void);
 void flush_cache(void);
 
-void cache_write (block_sector_t sector_idx, void *buffer);
+void cache_write (block_sector_t sector_idx, const void *buffer);
 void cache_read (block_sector_t sector_idx, void *buffer);
 void cache_read_ahead (block_sector_t sector_idx);
