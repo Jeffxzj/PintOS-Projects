@@ -394,6 +394,10 @@ syscall_write (int fd, const void *buffer, unsigned size)
   if (fd_struct == NULL || fd_struct->file == NULL)
     return -1;
   
+  struct inode *inode = file_get_inode (fd_struct->file);
+  if (inode_isdir (inode))
+    return -1;
+
   lock_acquire (&fs_lock);
   size_write = file_write (fd_struct->file, buffer, size);
   lock_release (&fs_lock);

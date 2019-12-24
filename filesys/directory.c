@@ -233,11 +233,22 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
-      if (e.in_use)
+      if (e.in_use && strcmp(e.name, ".") != 0 && strcmp(e.name, "..") != 0)
         {
           strlcpy (name, e.name, NAME_MAX + 1);
+          //printf ("name:%s\n",e.name);
           return true;
         } 
     }
   return false;
+}
+
+void dir_seek (struct dir* dir, off_t offset)
+{
+  dir->pos += offset;
+}
+
+off_t dir_tell (struct dir* dir)
+{
+  return dir->pos;
 }

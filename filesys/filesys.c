@@ -18,6 +18,7 @@ static void do_format (void);
 /* Helper functions for supporting sub-directories. */
 static char *get_filename (const char *pathname);
 static struct dir *get_directory (const char *pathname);
+struct dir;
 
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
@@ -88,6 +89,9 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
 struct file *
 filesys_open (const char *name)
 {
+  if (strcmp (name,"/") == 0)
+    return file_open(inode_open(ROOT_DIR_SECTOR));
+
   char *filename = get_filename (name);
   struct dir *dir = get_directory (name);
   struct inode *inode = NULL;
@@ -108,7 +112,16 @@ filesys_remove (const char *name)
 {
   char *filename = get_filename (name);
   struct dir *dir = get_directory (name);
+
+  if (!strcmp(filename, ".") || !strcmp(filename, "..")) 
+    {
+      dir_close(dir);
+      free (filename);
+      return false;
+    }
+
   bool success = dir != NULL && dir_remove (dir, name);
+  
   dir_close (dir); 
   free (filename);
   return success;
@@ -119,6 +132,13 @@ filesys_remove (const char *name)
 bool filesys_chdir (const char *name)
 {
   struct thread *cur = thread_current ();
+
+  if (strcmp (name, "/") == 0)
+    {
+      cur ->cur_dir = dir_open_root ();
+      return true;
+    }
+  
   char *dirname = get_filename (name);
   struct dir *dir = get_directory (name);
   
@@ -140,7 +160,12 @@ filesys_readdir (char *name, struct file *file)
   if (!inode_isdir (inode))
     return success;
   struct dir *dir = dir_open (inode);
+  
+  off_t pos = file_tell(file);
+  dir_seek(dir, pos);
   success = dir_readdir (dir, name);
+  file_seek(file, dir_tell(dir));
+
   return success; 
 }
 

@@ -294,8 +294,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       int chunk_size = size < min_left ? size : min_left;
       if (chunk_size <= 0)
         break;
-       
-      cache_read_ahead (sector_idx);
+      //cache_read_ahead (sector_idx);
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           /* Read full sector directly into caller's buffer. */
@@ -533,7 +532,7 @@ extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
           {
             if (!free_map_allocate (1, &disk_inode->db_indirect_idx))
               return false;
-            block_write (fs_device, disk_inode->db_indirect_idx, ZEROS);
+            //block_write (fs_device, disk_inode->db_indirect_idx, ZEROS);
             cache_write (disk_inode->db_indirect_idx, ZEROS);
           }
         //block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
