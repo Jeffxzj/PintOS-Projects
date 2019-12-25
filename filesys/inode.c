@@ -12,7 +12,7 @@
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
-#define DIRECT_BLOCK_NUM 122
+#define DIRECT_BLOCK_NUM 121
 #define INDIRECT_BLOCK_NUM 128
 #define DB_INDIRECT_BLOCK_NUM 16384  // 128 * 128
 
@@ -31,7 +31,7 @@ struct inode_disk
     //uint32_t unused[125];               /* Not used. */
     
     bool is_dir;
-    block_sector_t indirect_idx[3];
+    block_sector_t indirect_idx[4];
     block_sector_t direct_blocks[DIRECT_BLOCK_NUM];
   };
 
