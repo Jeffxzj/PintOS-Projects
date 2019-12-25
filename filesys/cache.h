@@ -3,7 +3,7 @@
 #include "../threads/synch.h"
 
 #define cache_size 64
-#define FLUSH_FREQU 2*TIMER_FREQ
+#define FLUSH_FREQU 2 * TIMER_FREQ
 
 struct cache_ele
 {

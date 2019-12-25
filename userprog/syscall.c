@@ -32,7 +32,7 @@ static void syscall_seek (int fd, unsigned position);
 static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
 
-/*Syscall functions for project 4. */
+/* Syscall functions for project 4. */
 static bool syscall_chdir (const char *dir);
 static bool syscall_mkdir (const char *dir);
 static bool syscall_readdir (int fd, char *name);
@@ -263,7 +263,7 @@ syscall_exec (const char *cmd_line)
   /* Wait until the child thread load */
   sema_down (&thread_current()->load_sema);
   /* If load fails, return -1 */
-  if (thread_current() -> child_load == -1)
+  if (thread_current()->child_load == -1)
     pid = -1;
 
   return pid;
@@ -434,7 +434,7 @@ syscall_tell (int fd)
 
 /* Closes file descriptor fd. Exiting or terminating a process implicitly 
    closes all its open file descriptors, as if by calling this function for 
-   each one.*/
+   each one. */
 static void 
 syscall_close (int fd)
 {
@@ -449,6 +449,8 @@ syscall_close (int fd)
   lock_release (&fs_lock);
 }
 
+/* Changes the current working directory of the process to dir, which may be 
+   relative or absolute. Returns true if successful, false on failure. */
 static bool 
 syscall_chdir (const char *dir) 
 {
@@ -458,6 +460,9 @@ syscall_chdir (const char *dir)
   return success;
 }
 
+/* Creates the directory named dir, which may be relative or absolute. Returns 
+   true if successful, false on failure. Fails if dir already exists or if any 
+   directory name in dir, besides the last, does not already exist. */
 static bool 
 syscall_mkdir (const char *dir)
 {
@@ -467,6 +472,10 @@ syscall_mkdir (const char *dir)
   return success;
 }
 
+/* Reads a directory entry from file descriptor fd, which must represent a 
+   directory. If successful, stores the null-terminated file name in name, 
+   which must have room for READDIR_MAX_LEN + 1 bytes, and returns true. 
+   If no entries are left in the directory, returns false. */
 static bool syscall_readdir (int fd, char *name)
 {
   struct file_descriptor *fd_struct = find_opened_file (thread_current(), fd);
@@ -476,6 +485,8 @@ static bool syscall_readdir (int fd, char *name)
   return success;
 }
 
+/* Returns true if fd represents a directory, 
+   false if it represents an ordinary file. */
 static bool syscall_isdir (int fd)
 {
   struct file_descriptor *fd_struct = find_opened_file (thread_current(), fd);
@@ -484,16 +495,17 @@ static bool syscall_isdir (int fd)
   return inode_isdir (file_get_inode (fd_struct->file));
 }
 
+/* Returns the inode number of the inode associated with fd, 
+   which may represent an ordinary file or a directory. */
 static int syscall_inumber (int fd)
 { 
   int inumber = -1;
   struct file_descriptor *fd_struct = find_opened_file (thread_current(), fd);
-  lock_acquire (&fs_lock);
   if (fd_struct != NULL)
     inumber = inode_get_inumber (file_get_inode (fd_struct->file));
-  lock_release (&fs_lock);
   return inumber;
 }
+
 /* Helper functions */
 static bool
 check_valid_pointer (void *ptr, uint8_t argc)

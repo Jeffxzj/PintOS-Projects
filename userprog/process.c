@@ -69,7 +69,7 @@ process_execute (const char *file_name)
   else
     {
       /* Owned by wait: Initialize child_info struct */
-      struct thread* t = get_thread_by_tid(tid);
+      struct thread* t = get_thread_by_tid (tid);
       t->parent_tid = thread_current ()->tid;
       /* Child process inherits parent's current directory */
       if (thread_current ()->cur_dir != NULL)

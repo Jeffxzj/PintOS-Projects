@@ -58,8 +58,7 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
   block_sector_t inode_sector = 0;
   char *filename = get_filename (name);
   struct dir *dir = get_directory (name);
-  //printf("%s wocaonima\n",filename);
-  //printf("%d", dir==NULL);
+
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, is_dir)
@@ -95,7 +94,6 @@ filesys_open (const char *name)
   char *filename = get_filename (name);
   struct dir *dir = get_directory (name);
   struct inode *inode = NULL;
-
   if (dir != NULL)
     dir_lookup (dir, filename, &inode);
   dir_close (dir);
@@ -112,16 +110,14 @@ filesys_remove (const char *name)
 {
   char *filename = get_filename (name);
   struct dir *dir = get_directory (name);
-
-  if (!strcmp(filename, ".") || !strcmp(filename, "..")) 
+  /* Relative directories cannot be removed. */
+  if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0) 
     {
       dir_close(dir);
       free (filename);
       return false;
     }
-
   bool success = dir != NULL && dir_remove (dir, filename);
-
   dir_close (dir); 
   free (filename);
   return success;
@@ -163,12 +159,11 @@ filesys_readdir (char *name, struct file *file)
     return success;
   struct dir *dir = dir_open (inode);
 
-  off_t pos = file_tell(file);
-  dir_seek(dir, pos);
+  off_t pos = file_tell (file);
+  dir_seek (dir, pos);
   success = dir_readdir (dir, name);
-  file_seek(file, dir_tell(dir));
+  file_seek (file, dir_tell (dir));
   
-  //printf ("name:%d\n",success);
   return success; 
 }
 
@@ -189,12 +184,12 @@ do_format (void)
   printf ("done.\n");
 }
 
-/*--------------------------- Parser functions ------------------------------*/
+/*--------------------------- Parser Functions ------------------------------*/
 static char *
 get_filename (const char *pathname)
 {
   size_t path_size = strlen (pathname) + 1;
-  char s[path_size];                       /* String to tokenize */
+  char s[path_size];
   strlcpy (s, pathname, path_size);
   /* Standard usage of strtok(). 
      Save the last token which represents the filename. */    
@@ -221,13 +216,12 @@ get_directory (const char *pathname)
   struct thread *cur = thread_current ();
 
   bool is_absolute = (s[0] == '/');
-  if (is_absolute || !cur->cur_dir){
-    //printf("root\n");
-    dir = dir_open_root ();
-    if (strcmp (s, "/") == 0)
-      return dir;
-    //printf("%d", dir==NULL); 
-  }
+  if (is_absolute || !cur->cur_dir)
+    {
+      dir = dir_open_root ();
+      if (strcmp (s, "/") == 0)
+        return dir;
+    }
   else
     dir = dir_open_cur ();
   char *token, *save_ptr;
@@ -238,14 +232,14 @@ get_directory (const char *pathname)
        token = strtok_r (NULL, "/", &save_ptr))
     {
       struct inode *inode = NULL;
-      if (dir_lookup (dir, prev_token, &inode) == false)
+      if (!dir_lookup (dir, prev_token, &inode))
         {
           dir_close (dir);
           return NULL;
         }
       prev_token = token;
       /* Continue if inode is a file type */
-      if (inode_isdir (inode) == false)
+      if (!inode_isdir (inode))
         continue;
       dir_close (dir);
       dir = dir_open (inode);

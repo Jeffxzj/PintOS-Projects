@@ -8,7 +8,7 @@
 void read_ahead_func (void *next_sector);
 static void write_behind_func (void *aux UNUSED);
 
-static struct cache_ele* cache_evict (void);
+static struct cache_ele *cache_evict (void);
 
 /* Set every cache_entry's valid bit to false and init lock */
 void cache_init(void)
