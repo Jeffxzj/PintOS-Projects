@@ -120,8 +120,8 @@ filesys_remove (const char *name)
       return false;
     }
 
-  bool success = dir != NULL && dir_remove (dir, name);
-  
+  bool success = dir != NULL && dir_remove (dir, filename);
+
   dir_close (dir); 
   free (filename);
   return success;
@@ -135,7 +135,7 @@ bool filesys_chdir (const char *name)
 
   if (strcmp (name, "/") == 0)
     {
-      cur ->cur_dir = dir_open_root ();
+      cur->cur_dir = dir_open_root ();
       return true;
     }
   
@@ -145,8 +145,10 @@ bool filesys_chdir (const char *name)
   struct inode *inode = NULL;
   bool success = (dir_lookup (dir, dirname, &inode)
                   && inode_isdir (inode));
-  if (success)
+  if (success){
+    dir_close (cur->cur_dir);
     cur->cur_dir = dir_open (inode);
+  }
   dir_close (dir);  
   free (dirname);
   return success;
@@ -160,12 +162,13 @@ filesys_readdir (char *name, struct file *file)
   if (!inode_isdir (inode))
     return success;
   struct dir *dir = dir_open (inode);
-  
+
   off_t pos = file_tell(file);
   dir_seek(dir, pos);
   success = dir_readdir (dir, name);
   file_seek(file, dir_tell(dir));
-
+  
+  //printf ("name:%d\n",success);
   return success; 
 }
 

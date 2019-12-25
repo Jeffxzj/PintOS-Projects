@@ -401,7 +401,7 @@ syscall_write (int fd, const void *buffer, unsigned size)
   lock_acquire (&fs_lock);
   size_write = file_write (fd_struct->file, buffer, size);
   lock_release (&fs_lock);
-  
+  //printf ("size:%d\n",size_write);
   return size_write;
 }
 

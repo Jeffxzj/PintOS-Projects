@@ -70,41 +70,37 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
-  if (pos < inode->data.length)
-    {
-      block_sector_t indirect_blocks[INDIRECT_BLOCK_NUM];
-      block_sector_t db_indirect_blocks[INDIRECT_BLOCK_NUM];
 
-      const struct inode_disk *disk_inode = &(inode->data);
-      block_sector_t sector_idx = pos / BLOCK_SECTOR_SIZE;
-      if (sector_idx < DIRECT_BLOCK_NUM)
-        return disk_inode->direct_blocks[sector_idx];
-      
-      sector_idx -= DIRECT_BLOCK_NUM;
-      if (sector_idx < INDIRECT_BLOCK_NUM)
-        {
-          cache_read (disk_inode->indirect_idx, indirect_blocks);
-          //block_read (fs_device, disk_inode->indirect_idx, indirect_blocks);
-          return indirect_blocks[sector_idx];
-        }
-      
-      sector_idx -= INDIRECT_BLOCK_NUM;
-      if (sector_idx < DB_INDIRECT_BLOCK_NUM)
-        {
-          int l2 = sector_idx / INDIRECT_BLOCK_NUM;
-          int l3 = sector_idx % INDIRECT_BLOCK_NUM;
-          cache_read (disk_inode->db_indirect_idx, indirect_blocks);
-          cache_read (indirect_blocks[l2], db_indirect_blocks);
-          //block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
-          //block_read (fs_device, indirect_blocks[l2], db_indirect_blocks);
-          return db_indirect_blocks[l3];
-        }
-      sector_idx -= DB_INDIRECT_BLOCK_NUM;
-      return -1;
+  block_sector_t indirect_blocks[INDIRECT_BLOCK_NUM];
+  block_sector_t db_indirect_blocks[INDIRECT_BLOCK_NUM];
+
+  const struct inode_disk *disk_inode = &(inode->data);
+  block_sector_t sector_idx = pos / BLOCK_SECTOR_SIZE;
+  if (sector_idx < DIRECT_BLOCK_NUM)
+    return disk_inode->direct_blocks[sector_idx];
+  
+  sector_idx -= DIRECT_BLOCK_NUM;
+  if (sector_idx < INDIRECT_BLOCK_NUM)
+    {
+      cache_read (disk_inode->indirect_idx, indirect_blocks);
+      //block_read (fs_device, disk_inode->indirect_idx, indirect_blocks);
+      return indirect_blocks[sector_idx];
     }
-    //return inode->data.start + pos / BLOCK_SECTOR_SIZE;
-  else
-    return -1;
+  
+  sector_idx -= INDIRECT_BLOCK_NUM;
+  if (sector_idx < DB_INDIRECT_BLOCK_NUM)
+    {
+      int l2 = sector_idx / INDIRECT_BLOCK_NUM;
+      int l3 = sector_idx % INDIRECT_BLOCK_NUM;
+      cache_read (disk_inode->db_indirect_idx, indirect_blocks);
+      cache_read (indirect_blocks[l2], db_indirect_blocks);
+      //block_read (fs_device, disk_inode->db_indirect_idx, indirect_blocks);
+      //block_read (fs_device, indirect_blocks[l2], db_indirect_blocks);
+      return db_indirect_blocks[l3];
+    }
+  sector_idx -= DB_INDIRECT_BLOCK_NUM;
+  return -1;
+  //return inode->data.start + pos / BLOCK_SECTOR_SIZE;
 }
 
 /* List of open inodes, so that opening a single inode twice
@@ -449,20 +445,26 @@ alloc_block_space (size_t sectors, struct inode_disk *disk_inode)
   size_t total_sectors = sectors;   /* Total number of sectors to allocate */
   size_t level_sectors = MIN (total_sectors, DIRECT_BLOCK_NUM);
   success = extend_inode_level (level_sectors, disk_inode, 1);
+  if (!success)
+    printf ("extend level 1 failed\n");
   if (!success || total_sectors <= DIRECT_BLOCK_NUM)
     return success;
-
   /* First level is full, extend space to second level. */
   total_sectors -= DIRECT_BLOCK_NUM;
   level_sectors = MIN (total_sectors, INDIRECT_BLOCK_NUM);
   success = extend_inode_level (level_sectors, disk_inode, 2);
+  if (!success)
+    printf ("extend level 2 failed\n");
   if (!success || total_sectors <= INDIRECT_BLOCK_NUM)
     return success;
 
+  //printf ("sec:%d\n",total_sectors);
   /* Second level is full, extend space to the third level. */
   total_sectors -= INDIRECT_BLOCK_NUM;
   level_sectors = MIN (total_sectors, DB_INDIRECT_BLOCK_NUM);
   success = extend_inode_level (level_sectors, disk_inode, 3);
+  if (!success)
+    printf ("extend level 3 failed\n");
   if (!success || total_sectors <= DB_INDIRECT_BLOCK_NUM)
     return success;
 
@@ -556,10 +558,10 @@ extend_inode_level (size_t sectors, struct inode_disk *disk_inode, int level)
                   break;
                 if (db_indirect_blocks[j] == 0)
                   {
-                    if (!free_map_allocate (1, &db_indirect_blocks[i]))
+                    if (!free_map_allocate (1, &db_indirect_blocks[j]))
                       return false;
                     //block_write (fs_device, db_indirect_blocks[i], ZEROS);
-                    cache_write (db_indirect_blocks[i], ZEROS);
+                    cache_write (db_indirect_blocks[j], ZEROS);
                     total_sectors--;
                   }
               }
@@ -616,4 +618,10 @@ free_all_levels (const struct inode *inode)
         }
     }
   return;
+}
+
+int
+inode_get_open_cnt (const struct inode *inode)
+{
+  return inode->open_cnt;
 }
